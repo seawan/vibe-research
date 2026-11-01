@@ -331,6 +331,19 @@ function loadPost(id) {
   let withIncludes = expandIncludes(content, dir, id);
   const macros = resolveResultMacros(withIncludes, run?.result_summary);
   macros.errors.forEach(report);
+  // front-matter text shown on the page and in cards/feeds may use the same {{result.key}} macros
+  for (const k of ['title', 'subtitle', 'summary']) {
+    if (typeof fm[k] !== 'string') continue;
+    const r = resolveResultMacros(fm[k], run?.result_summary);
+    r.errors.forEach((m) => report(`${k}: ${m}`));
+    fm[k] = r.markdown;
+  }
+  if (Array.isArray(fm.tldr)) fm.tldr = fm.tldr.map((x) => {
+    if (typeof x !== 'string') return x;
+    const r = resolveResultMacros(x, run?.result_summary);
+    r.errors.forEach((m) => report(`tldr: ${m}`));
+    return r.markdown;
+  });
   withIncludes = macros.markdown;
   const figures = figuresIn(withIncludes); // include-expanded, as rendered
   checkFigures({ figures, outputs: Array.isArray(spec?.outputs) ? spec.outputs : fm.outputs ?? [], upload: typeof spec?.upload === 'string' ? spec.upload : '.' }).forEach(report);

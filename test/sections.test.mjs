@@ -97,6 +97,13 @@ test('result macro substitutes value', () => {
     fs.appendFileSync(path.join(d, 'index.md'), '\nThe value is {{result.errors.qmc}}.\n');
   });
   assert.ok(b.html.includes('The value is 0.001.'));
+  const t = buildVariant((d) => {
+    fs.writeFileSync(path.join(d, 'run.json'), JSON.stringify(run));
+    const f = path.join(d, 'index.md');
+    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('date: 2026-11-01\n', 'date: 2026-11-01\ntldr:\n  - "QMC came out at {{result.qmc}}."\n'));
+  });
+  assert.ok(t.html.includes('QMC came out at 1.5.'), 'tldr macro resolved');
+  assert.ok(!t.html.includes('{{result'), 'no raw macro left on the page');
 });
 
 test('unknown result macro is an error', () => {

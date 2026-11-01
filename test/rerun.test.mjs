@@ -238,10 +238,17 @@ test('resolvePostDir maps <user>/<slug> into the package posts folder', () => {
   assert.equal(resolvePostDir('./alice/hello', { cwd: '/x' }), '/x/alice/hello');
 });
 
+test('parseOutput rebuilds stdout lines that delta-cli joined without newlines', () => {
+  // real delta-cli: one stdout frame per line, and complete.stdout with the newlines dropped
+  const sse = 'data: {"type":"stdout","data":"numpy==2.2.6"}\n\ndata: {"type":"stdout","data":"torch==2.8.0"}\n\n'
+    + 'data: {"type":"complete","exit_code":0,"stdout":"numpy==2.2.6torch==2.8.0"}\n\n';
+  assert.equal(parseOutput(sse, 0).json.stdout, 'numpy==2.2.6\ntorch==2.8.0\n');
+});
+
 test('parseOutput reads envelopes, SSE complete frames and typed errors', () => {
   assert.deepEqual(parseOutput('{"ok":true,"data":{"sandbox_id":"s"}}\n', 0).json, { ok: true, data: { sandbox_id: 's' } });
   const sse = 'data: {"type":"init","execution_id":"e"}\n\ndata: {"type":"stdout","data":"hi"}\n\ndata: {"type":"complete","exit_code":0,"execution_id":"e","result_summary":{"a":1}}\n\n';
-  assert.deepEqual(parseOutput(sse, 0).json, { type: 'complete', exit_code: 0, execution_id: 'e', result_summary: { a: 1 } });
+  assert.deepEqual(parseOutput(sse, 0).json, { type: 'complete', exit_code: 0, execution_id: 'e', result_summary: { a: 1 }, stdout: 'hi\n' });
   assert.equal(parseOutput('delta-cli version v1.1.17\n', 0).json, null);
   const failed = sse.replace('"exit_code":0', '"exit_code":2') + '{"ok":false,"error":{"type":"command_failed","message":"exit 2"}}\n';
   assert.throws(() => parseOutput(failed, 8), (e) => e instanceof DeltaError && e.type === 'command_failed' && e.frame.exit_code === 2);

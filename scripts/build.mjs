@@ -302,15 +302,15 @@ function loadPost(id) {
   if (fs.existsSync(path.join(dir, 'run.json'))) {
     try { run = JSON.parse(fs.readFileSync(path.join(dir, 'run.json'), 'utf8')); } catch (e) { report(`run.json: invalid JSON (${e.message})`); }
   }
-  const figures = figuresIn(content);
-  checkFigures({ figures, outputs: Array.isArray(spec?.outputs) ? spec.outputs : fm.outputs ?? [] }).forEach(report);
+  const withIncludes = expandIncludes(content, dir, id);
+  const figures = figuresIn(withIncludes); // include-expanded, as rendered
+  checkFigures({ figures, outputs: Array.isArray(spec?.outputs) ? spec.outputs : fm.outputs ?? [], upload: typeof spec?.upload === 'string' ? spec.upload : '.' }).forEach(report);
   const delta = { spec: specOk ? spec : null, run, ...computeBadge({ postDir: dir, spec: specOk ? spec : null, run, figures }) };
   const refsPath = path.join(dir, 'refs.json');
   const refList = fs.existsSync(refsPath) ? JSON.parse(fs.readFileSync(refsPath, 'utf8')) : [];
   const refs = Object.fromEntries(refList.map((r) => [r.key, r]));
 
   const files = collectFiles(dir, id);
-  const withIncludes = expandIncludes(content, dir, id);
   const { md, order } = processCitations(withIncludes, refs, id, fm.draft || ALLOW_UNVERIFIED);
   for (const k of order) {
     if (!refs[k].verified) (fm.draft || ALLOW_UNVERIFIED ? warnings : errors).push(`${id}: reference "${k}" is not verified (run: npm run check-refs -- posts/${id})`);

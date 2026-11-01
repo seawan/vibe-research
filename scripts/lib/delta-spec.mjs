@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import yaml from 'js-yaml';
+import { marked } from 'marked';
 
 const INTERPRETERS = ['python', 'python3', 'node', 'bash', 'sh', 'Rscript', 'julia'];
 const SIZE_RE = /^(\d+)(Gi|Mi)$/;
@@ -49,47 +50,54 @@ export function parseDeltaSpec(text) {
   return { spec: { ...spec, upload }, errors };
 }
 
-// Images in the markdown (outside code fences): { path, diagram }. `{diagram}` at the end of the title marks a hand-made diagram.
+// Images in the markdown as marked sees them (so reference-style, <angle> paths, either quote style and code spans/blocks all behave).
+// `{diagram}` at the end of the title marks a hand-made diagram.
 export function figuresIn(markdown) {
   const out = [];
-  let fence = null;
-  const re = /!\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+"((?:[^"\\]|\\.)*)")?\s*\)/g;
-  for (const line of String(markdown).split(/\r?\n/)) {
-    const f = line.match(/^ {0,3}(`{3,}|~{3,})/);
-    if (f) {
-      if (!fence) fence = f[1][0].repeat(f[1].length);
-      else if (f[1][0] === fence[0] && f[1].length >= fence.length) fence = null;
-      continue;
+  const walk = (node) => {
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'image') {
+      let href = node.href ?? '';
+      try { href = decodeURI(href); } catch { /* keep as is */ }
+      out.push({ path: normPath(href), diagram: /\{diagram\}\s*$/.test(node.title ?? '') });
+      return;
     }
-    if (fence) continue;
-    for (const m of line.matchAll(re)) out.push({ path: normPath(m[1]), diagram: /\{diagram\}\s*$/.test(m[2] ?? '') });
-  }
+    for (const k of ['tokens', 'items', 'header', 'rows']) walk(node[k]);
+  };
+  walk(marked.lexer(String(markdown)));
   return out;
 }
 
 export const stripDiagram = (title) => String(title ?? '').replace(/\s*\{diagram\}\s*$/, '');
 
-export function checkFigures({ figures = [], outputs = [] }) {
-  const have = new Set((Array.isArray(outputs) ? outputs : []).filter((o) => typeof o === 'string').map(normPath));
+// outputs are relative to the upload dir (the sandbox working directory); figure paths are relative to the post dir
+export function checkFigures({ figures = [], outputs = [], upload = '.' }) {
+  const have = new Set((Array.isArray(outputs) ? outputs : []).filter((o) => typeof o === 'string').map((o) => normPath(path.posix.join(normPath(upload), normPath(o)))));
   return figures.filter((f) => !f.diagram && !have.has(f.path)).map((f) => `figure "${f.path}" is not listed in outputs and not marked {diagram}`);
 }
 
 export function computeBadge({ postDir, spec, run, figures = [] }) {
   const reasons = [];
   if (!spec) return { badge: false, reasons: ['delta.yaml is missing or invalid'] };
-  const exists = (p) => fs.existsSync(path.join(postDir, p));
+  const up = spec.upload ?? '.';
+  // must exist and, after resolving symlinks, stay inside the post folder
+  const root = fs.realpathSync(postDir);
+  const real = (rel) => { try { const r = fs.realpathSync(path.join(postDir, rel)); return r === root || r.startsWith(root + path.sep) ? r : null; } catch { return null; } };
+  const exists = (rel) => real(rel) !== null;
+  const inUp = (p) => path.join(up, p);
   if (!run) reasons.push('run.json is missing (the Specs section needs a real run)');
   else if (run.exit_code !== 0) reasons.push(`run.json: exit_code is ${run.exit_code}, expected 0`);
-  const up = spec.upload ?? '.';
-  if (!exists(up) || !fs.statSync(path.join(postDir, up)).isDirectory()) reasons.push(`upload directory "${up}" does not exist`);
-  // first non-flag token after an interpreter is the script; python -m / -c have none
+  const upReal = real(up);
+  if (!upReal || !fs.statSync(upReal).isDirectory()) reasons.push(`upload directory "${up}" does not exist`);
+  // first non-flag token after an interpreter is the script (relative to upload); python -m / -c have none
   const tokens = String(spec.command ?? '').trim().split(/\s+/);
   if (INTERPRETERS.includes(path.posix.basename(tokens[0]))) {
     const rest = tokens.slice(1);
     const script = rest.some((t) => t === '-m' || t === '-c') ? undefined : rest.find((t) => !t.startsWith('-'));
-    if (script && !exists(script)) reasons.push(`command script "${script}" does not exist`);
+    if (script && !exists(inUp(script))) reasons.push(`command script "${script}" does not exist`);
   }
-  for (const o of spec.outputs ?? []) if (!exists(o)) reasons.push(`output file "${o}" does not exist`);
-  reasons.push(...checkFigures({ figures, outputs: spec.outputs }));
+  for (const o of spec.outputs ?? []) if (!exists(inUp(o))) reasons.push(`output file "${o}" does not exist`);
+  reasons.push(...checkFigures({ figures, outputs: spec.outputs, upload: up }));
   return { badge: reasons.length === 0, reasons };
 }

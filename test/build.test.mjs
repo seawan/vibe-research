@@ -124,6 +124,7 @@ test('wrong-typed front matter and malformed JSON are per-post errors, not crash
     [(d) => fs.writeFileSync(path.join(d, 'refs.json'), '{not json'), /alice\/var: refs\.json/],
     [(d) => fs.writeFileSync(path.join(d, 'refs.json'), '{"a": 1}'), /alice\/var: refs\.json/],
     [(d) => fs.writeFileSync(path.join(d, 'run.json'), '{not json'), /alice\/var: run\.json/],
+    [(d) => fs.writeFileSync(path.join(d, 'index.md'), '# no front matter\n'), /alice\/var: front matter is missing "date"/],
   ]) {
     let result;
     assert.doesNotThrow(() => { ({ result } = buildVariant(edit)); });

@@ -316,6 +316,7 @@ function loadPost(id) {
   }
   if (Array.isArray(fm.ai) && fm.ai.some((a) => !a || typeof a !== 'object')) { errors.push(`${id}: ai: every entry must be a { name, model, role } map`); fm.ai = fm.ai.filter((a) => a && typeof a === 'object'); }
   if (fm.date && isNaN(new Date(fm.date))) { errors.push(`${id}: date: not a valid date`); fm.date = new Date(0); }
+  if (!fm.date) fm.date = new Date(0); // already reported as missing; keeps rendering from crashing
   // delta.yaml + run.json, figure provenance: errors, or warnings for drafts
   const report = (m) => (fm.draft ? warnings : errors).push(`${id}: ${m}`);
   let spec = null, run = null, specOk = false;
@@ -395,6 +396,9 @@ export function buildSite({ postsDir = path.join(ROOT, 'posts'), outDir = path.j
     .sort((a, b) => new Date(b.fm.date) - new Date(a.fm.date));
 
   for (const p of posts) {
+    try { writePost(p); } catch (e) { errors.push(`${p.id}: could not be rendered (${e.message})`); }
+  }
+  function writePost(p) {
     const out = path.join(DIST, 'posts', p.user, p.slug);
     // copy figures/data next to the post, skipping sources and hidden check reports
     copyDir(p.dir, out, (n) => !n.startsWith('.') && n !== 'index.md' && n !== 'refs.json');

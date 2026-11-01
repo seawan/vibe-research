@@ -13,7 +13,7 @@ Work through the steps in order. Never put a number in the post that you cannot 
 
 ## Hard rules (never break these)
 
-1. **Ask before creating a Delta sandbox.** A sandbox uses the author's own Delta quota. Say what will run (image, GPU, time limit from `delta.yaml`) and wait for a yes before `npm run rerun -- <dir> --record`. A `--dry-run` is free and needs no approval.
+1. **Ask before creating a Delta sandbox.** A sandbox uses the author's own Delta quota. Say what will run (image, GPU, time limit from `delta.yaml`) and wait for a yes before `npm run rerun -- <dir> --record`. `npm run rerun -- <dir> --record --dry-run` is free and needs no approval (plain `--dry-run` is only for checking an already recorded post).
 2. **Ask before opening the pull request.** Show the preview and a summary first. Also ask before any `git push`.
 3. **Never write `contribution` or `author_verification.checked` yourself.** Ask the author, and paste their words (light typo fixes only). Never set `author_verification.verified: true`, `by` or `date` before they have given their words.
 4. **Never invent `ai` entries.** List only the tools and models the author says they used, with the role they describe. Ask for the exact model name if you are not sure.
@@ -55,7 +55,7 @@ Skip this step only if the experiment did not run on Delta; the post is then all
 1. Write `delta.yaml` in the post folder **from the sandbox the author actually used** (image name, CPU, memory, GPU, GPU memory and type, `max_life`, `timeout`). Ask the author for these if you do not have them; never guess an image or GPU. The format is in the repo's design spec (section 6.2): `version`, `deployment`, `sandbox`, `upload`, `setup`, `command`, `timeout`, `outputs`, `expected`.
 2. Make the script **print its final JSON summary** as the last line of stdout (for example `{"qmc_error_262k": 1.1e-4, "slope": -0.79}`). The run record keeps it as `result_summary`, and the post's `{{result.key}}` macros read from it.
 3. List every file the run produces in `outputs` (the figures and result files you will show in the post).
-4. Validate for free: `npm run rerun -- posts/<user>/<slug> --dry-run`. Fix everything it reports.
+4. Validate for free, before the first recording: `npm run rerun -- posts/<user>/<slug> --record --dry-run` (plain `--dry-run` needs published outputs, so it only works on an already recorded post). Fix everything it reports.
 5. **Ask the author for approval**, naming the image/GPU/time limit, because this creates a Delta sandbox on their quota. Only after a yes:
 
    ```bash
@@ -159,7 +159,7 @@ It looks each entry up in arXiv / Crossref / Semantic Scholar, compares title, f
 
 Publishing requires the author's own check of the results. Ask them to verify the numbers and figures themselves (re-run, spot-check against the data files, read the cited sources), then ask them to write, in their own words, **what they actually checked** (specific: which run, which number, against what; boilerplate or empty text is rejected by CI).
 
-Paste their words into `author_verification.checked` and set `verified: true`, `by: <their GitHub login>`, `date: <today, YYYY-MM-DD>` only after they have given you that text. **Never write `checked` yourself, never paraphrase it into something they did not say, and never mark `verified: true` on their behalf if they have not checked.** If they have not checked yet, leave the stub as is; the post stays a draft.
+Show the author the exact `checked` text (their words) and get an explicit confirmation before writing it into `author_verification.checked`; or ask them to edit the file themselves. Set `verified: true`, `by: <their GitHub login>`, `date: <today, YYYY-MM-DD>` only after that confirmation. **Never write `checked` yourself, never paraphrase it into something they did not say, and never mark `verified: true` on their behalf if they have not checked.** If they have not checked yet, leave the stub as is; the post stays a draft.
 
 ## 9. Build and preview
 
@@ -174,7 +174,7 @@ Fix every `error:`. Then look at the post in the browser: math renders, figures 
 ## 10. Publish: fork, branch, pull request
 
 1. Show the author the preview and a short summary: title, TL;DR, figures, reference check results, the `ai` and `contribution` text as written, the author-verification text, whether the post earns the Delta badge. **Ask before opening the pull request.**
-2. On approval: remove `draft: true` from the front matter and run `npm run build` (strict). Fix any error.
+2. If `author_verification` is not complete (`verified: true`, `by`, `date`, specific `checked`), stop here: keep `draft: true` and do not open the PR. Otherwise, on approval: remove `draft: true` from the front matter and run `npm run build` (strict). Fix any error.
 3. Create a branch, commit only `posts/<user>/<slug>/`, and open the PR (check that `origin` is the author's fork, or fork first with `gh repo fork seawan/vibe-research`):
 
    ```bash

@@ -7,8 +7,11 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 let user = '';
-const ui = args.indexOf('--user');
-if (ui >= 0) { user = (args[ui + 1] || '').trim(); args.splice(ui, 2); }
+const ui = args.findIndex((a) => a === '--user' || a.startsWith('--user='));
+if (ui >= 0) {
+  if (args[ui] === '--user') { user = (args[ui + 1] || '').trim(); args.splice(ui, 2); }
+  else { user = args[ui].slice(7).trim(); args.splice(ui, 1); }
+}
 const title = args.join(' ').trim();
 if (!title) { console.error('usage: npm run new -- [--user <github-login>] "Post title"'); process.exit(1); }
 if (!user) {

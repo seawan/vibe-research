@@ -65,6 +65,8 @@ test('new-post scaffolds nested folder', async () => {
   assert.match(fm, /^draft: true(\s|$)/m);
   assert.ok(fs.existsSync(path.join(dir, 'refs.json')));
   assert.ok(!/^## Reproduce/mi.test(md));
+  execFileSync('node', ['scripts/new-post.mjs', '--user=bob', 'Other'], { cwd: tmp });
+  assert.ok(fs.existsSync(path.join(tmp, 'posts/bob/other/index.md')));
   // refuses to overwrite
   const again = spawnSync('node', ['scripts/new-post.mjs', '--user', 'alice', 'My Title'], { cwd: tmp, encoding: 'utf8' });
   assert.notEqual(again.status, 0);

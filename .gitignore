@@ -3,3 +3,4 @@ dist/
 .superpowers/
 .refcheck-status
 .refcheck.json
+pr-report/

@@ -1,5 +1,5 @@
 // Verify a post's references against arXiv, Crossref and Semantic Scholar.
-// Usage: node scripts/check-refs.mjs posts/<user>/<slug> [--fix] [--ci]
+// Usage: node scripts/check-refs.mjs posts/<user>/<slug> [--fix] [--ci] [--cache <path>]
 //
 // For each entry in refs.json it looks up the paper (by arXiv id, then DOI, then title search),
 // compares title / first-author surname / year, and on success writes back
@@ -9,19 +9,22 @@
 // --fix overwrites title/authors/year/venue with the canonical metadata when they disagree.
 // --ci never trusts incoming `verified` flags, uses refcache.json at the repo root, and writes
 //   <postDir>/.refcheck-status = ok | retry | failed (exit 1 only for failed).
+// --cache <path> reads/writes the cache there instead (CI passes a copy of the base branch's refcache.json).
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkRefs } from './lib/refcheck.mjs';
 
-const USAGE = 'usage: node scripts/check-refs.mjs posts/<user>/<slug> [--fix] [--ci]';
+const USAGE = 'usage: node scripts/check-refs.mjs posts/<user>/<slug> [--fix] [--ci] [--cache <path>]';
 const defaultCache = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'refcache.json');
 
 // Returns the process exit code. fetchImpl / cachePath / fast / log are injectable for tests.
 export async function runCli(argv, { fetchImpl = fetch, cachePath = defaultCache, fast = false, log = console.log } = {}) {
   const FIX = argv.includes('--fix');
   const CI = argv.includes('--ci');
-  const postDir = argv.find((a) => !a.startsWith('--'));
+  const ci = argv.indexOf('--cache');
+  if (ci >= 0) { if (!argv[ci + 1]) { console.error(USAGE); return 1; } cachePath = argv[ci + 1]; }
+  const postDir = argv.find((a, i) => !a.startsWith('--') && !(ci >= 0 && i === ci + 1));
   if (!postDir) { console.error(USAGE); return 1; }
   const refsPath = path.join(postDir, 'refs.json');
   const refs = JSON.parse(fs.readFileSync(refsPath, 'utf8'));

@@ -1,6 +1,8 @@
-# Vibe Research Notes
+# Vibe Research
 
-A minimal static blog for plain-language technical reports: Markdown + KaTeX math, figures, callouts, and numbered citations that must be machine-verified before a post can be published.
+A static site for AI-assisted research written up like a short paper: Markdown + KaTeX math, figures, callouts, numbered citations that must be machine-verified, an AI & process box, author verification, and a Delta rerun package.
+
+Anyone can contribute a post by pull request: see [CONTRIBUTING.md](CONTRIBUTING.md) for the post format, licenses, limits and review policy.
 
 ## Daily use
 
@@ -10,17 +12,18 @@ By hand:
 
 ```bash
 npm install
-npm run new -- "My post title"            # scaffold posts/<slug>/ from templates/post.md
-npm run check-refs -- posts/<slug>        # verify refs.json against arXiv / Crossref / Semantic Scholar
+npm run new -- "My post title"            # scaffold a post folder from templates/post.md
+npm run check-refs -- posts/<user>/<slug> # verify refs.json against arXiv / Crossref / Semantic Scholar
 npm run serve                             # preview at http://localhost:4321 (drafts shown)
 npm run build                             # strict build into dist/
+npm run rerun -- posts/<user>/<slug> --record   # run on Delta, pull outputs, write run.json
 ```
 
 ## Writing a post
 
-- `posts/<slug>/index.md`: front matter (`title`, `date`, `summary`, `tags`, `tldr`, `code`, `draft`) + Markdown.
+- `posts/<user>/<slug>/index.md`: front matter (`title`, `date`, `summary`, `tags`, `tldr`, `code`, `draft`, plus `authors`, `ai`, `contribution`, `license`, `code_license`, `author_verification`; see CONTRIBUTING.md) + Markdown.
 - Math: `$inline$` and `$$display$$`, rendered at build time with KaTeX.
-- Citations: `[@key]` or `[@a; @b]`, with entries in `posts/<slug>/refs.json`.
+- Citations: `[@key]` or `[@a; @b]`, with entries in `refs.json` next to `index.md`.
 - Figures: `![alt](figure.png "Caption")` on its own line → numbered figure.
 - Callouts: `> [!INTUITION]`, `> [!TAKEAWAY]`, `> [!NOTE]`, `> [!WARNING]`, `> [!DEFINITION]`, `> [!EXAMPLE]`.
 - Everything else in the post folder (figures, scripts, CSVs) is copied next to the page.
@@ -29,12 +32,15 @@ npm run build                             # strict build into dist/
 
 `npm run build` fails if a cited key is missing from `refs.json`, a cited reference is not verified, or any math fails to render. Posts with `draft: true` are left out unless you use `npm run build:drafts`.
 
+## Pull requests and CI
+
+- `.github/workflows/pr-check.yml` (**PR checks**, `pull_request`, read-only token): `npm test`, the PR policy (`scripts/check-pr.mjs`: only the author's own `posts/<user>/<slug>/` folders, authors read from the base branch, file-type allowlist, 5 MB/file and 25 MB/post, no active SVG), `check-refs --ci` on each changed post using the base branch's `refcache.json`, and `npm run build:drafts`. It uploads `site-preview` (the built site) and `pr-report` (the checklist).
+- `.github/workflows/pr-comment.yml` (`workflow_run` after PR checks): downloads only `pr-report` and creates or updates one checklist comment on the PR. It never checks out or runs PR code.
+- `.github/CODEOWNERS`: every merge needs the owner's review. Takedown = revert.
+
 ## Deploy (GitHub Pages)
 
-1. Create a GitHub repo (e.g. `<you>.github.io` for a root site, or any name for `https://<you>.github.io/<repo>/`).
-2. Edit `site.config.json`: `siteUrl` = `https://<you>.github.io`, `baseUrl` = `/` or `/<repo>/`; also check `title` and `author`.
-3. In the repo settings, set **Pages → Source** to **GitHub Actions**.
-4. Push to `main`; `.github/workflows/deploy.yml` builds and deploys.
+`site.config.json` holds `siteUrl` (`https://seawan.github.io`), `baseUrl` (`/vibe-research/`) and `repo`. In the repo settings, set **Pages → Source** to **GitHub Actions**. Every push to `main` runs `.github/workflows/deploy.yml`: `npm test`, then a strict `npm run build`, then deploy.
 
 ## Skill
 

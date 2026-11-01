@@ -33,3 +33,16 @@ test('schema violations are build errors, or warnings for drafts', () => {
   assert.ok(!r.errors.some((e) => e.includes('license:')));
   assert.ok(r.warnings.some((e) => e.startsWith('alice/bad: license:')));
 });
+
+test('cli --summary writes badge status per post', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-summary-'));
+  const summary = path.join(tmp, 'report', 'build.json');
+  execFileSync(process.execPath, [path.join(here, '../scripts/build.mjs'), '--drafts', '--posts', path.join(here, 'fixtures/posts'), '--out', path.join(tmp, 'dist'), '--summary', summary], { stdio: 'pipe' });
+  const s = JSON.parse(fs.readFileSync(summary, 'utf8'));
+  assert.deepEqual(s.errors, []);
+  const hello = s.posts.find((p) => p.id === 'alice/hello');
+  assert.equal(typeof hello.badge, 'boolean');
+  assert.ok(Array.isArray(hello.reasons));
+});

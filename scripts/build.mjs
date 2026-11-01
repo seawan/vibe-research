@@ -1,5 +1,5 @@
 // Static site builder: posts/<user>/<slug>/index.md (+ refs.json, figures) -> dist/
-// Usage: node scripts/build.mjs [--drafts] [--allow-unverified] [--posts <dir>] [--out <dir>]
+// Usage: node scripts/build.mjs [--drafts] [--allow-unverified] [--posts <dir>] [--out <dir>] [--summary <json>]
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -415,6 +415,13 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? path.resolve(argv[i + 1]) : undefined; };
   const result = buildSite({ postsDir: opt('--posts'), outDir: opt('--out'), drafts: argv.includes('--drafts'), allowUnverified: argv.includes('--allow-unverified') });
   for (const w of result.warnings) console.warn(`warning: ${w}`);
+  // --summary <file>: badge status per post, for the PR checklist (written even when the build fails)
+  const summaryPath = opt('--summary');
+  if (summaryPath) {
+    fs.mkdirSync(path.dirname(summaryPath), { recursive: true });
+    const posts = result.posts.map((p) => ({ id: p.id, badge: !!p.delta.badge, reasons: p.delta.reasons ?? [] }));
+    fs.writeFileSync(summaryPath, JSON.stringify({ errors: result.errors, warnings: result.warnings, posts }, null, 2) + '\n');
+  }
   if (result.errors.length) {
     for (const e of result.errors) console.error(`error: ${e}`);
     console.error(`\nBuild failed with ${result.errors.length} error(s).`);

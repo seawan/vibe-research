@@ -100,3 +100,14 @@ test('cli --ci network failure writes retry and exits 0', async () => {
   assert.equal(fs.readFileSync(path.join(d, '.refcheck-status'), 'utf8').trim(), 'retry');
   assert.equal(readJSON(path.join(d, 'refs.json'))[0].verified, false);
 });
+
+test('cli --cache <path> overrides the cache location, before or after the post dir', async () => {
+  const { d, cachePath } = tmpPost([{ ...base(), verified: false }]);
+  const other = path.join(d, 'base-cache.json');
+  fs.writeFileSync(other, '{}');
+  for (const argv of [['--cache', other, d, '--ci'], [d, '--ci', '--cache', other]]) {
+    assert.equal(await runCli(argv, { fetchImpl: stub(), cachePath, fast: true, log: () => {} }), 0);
+  }
+  assert.ok(readJSON(other)['doi:10.5555/3295222']);
+  assert.equal(fs.existsSync(cachePath), false);
+});

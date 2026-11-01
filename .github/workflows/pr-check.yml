@@ -1,0 +1,108 @@
+# Runs the PR's code with a read-only token. Results go into the pr-report artifact;
+# pr-comment.yml (workflow_run, never checks out PR code) posts them as a comment.
+name: PR checks
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      BASE: ${{ github.event.pull_request.base.sha }}
+      HEAD: ${{ github.event.pull_request.head.sha }}
+      PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # base and head commits for the diff, full history for post dates
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - id: test
+        name: npm test
+        continue-on-error: true
+        run: npm test
+
+      - id: posts
+        name: List changed posts
+        run: |
+          node scripts/check-pr.mjs --base "$BASE" --head "$HEAD" --list-posts > "$RUNNER_TEMP/posts.txt"
+          cat "$RUNNER_TEMP/posts.txt"
+
+      - id: refs
+        name: Re-check references (cache from the base branch)
+        continue-on-error: true
+        run: |
+          # the PR's own refcache.json is never trusted
+          git show "$BASE:refcache.json" > "$RUNNER_TEMP/refcache.json" 2>/dev/null || echo '{}' > "$RUNNER_TEMP/refcache.json"
+          status=0
+          while IFS= read -r dir; do
+            [ -f "$dir/refs.json" ] || continue
+            node scripts/check-refs.mjs "$dir" --ci --cache "$RUNNER_TEMP/refcache.json" || status=1
+          done < "$RUNNER_TEMP/posts.txt"
+          exit $status
+
+      - id: build
+        name: npm run build:drafts
+        continue-on-error: true
+        run: |
+          mkdir -p pr-report
+          # a network failure in check-refs is "retry", not "fail": don't fail the build on those refs
+          extra=""
+          if grep -qx retry posts/*/*/.refcheck-status 2>/dev/null; then
+            extra="--allow-unverified"
+            echo "::warning::references could not be re-checked (network); re-run this workflow before merging"
+          fi
+          npm run build:drafts -- --summary pr-report/build.json $extra
+
+      - id: policy
+        name: PR policy and checklist
+        continue-on-error: true
+        env:
+          TEST_OUTCOME: ${{ steps.test.outcome }}
+          REFS_OUTCOME: ${{ steps.refs.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+        run: |
+          node scripts/check-pr.mjs --base "$BASE" --head "$HEAD" --author "$PR_AUTHOR" --pr "$PR_NUMBER" \
+            --build-summary pr-report/build.json \
+            --result "npm test=$TEST_OUTCOME" \
+            --result "references (check-refs --ci)=$REFS_OUTCOME" \
+            --result "build:drafts=$BUILD_OUTCOME"
+
+      - name: Upload site preview
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-preview
+          path: dist/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload PR report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-report
+          path: |
+            pr-report/checklist.md
+            pr-report/pr-number
+          retention-days: 14
+
+      - name: Fail if any check failed
+        env:
+          OUTCOMES: ${{ steps.test.outcome }} ${{ steps.refs.outcome }} ${{ steps.build.outcome }} ${{ steps.policy.outcome }}
+        run: |
+          echo "outcomes: $OUTCOMES"
+          for o in $OUTCOMES; do [ "$o" = success ] || exit 1; done

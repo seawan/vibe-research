@@ -1,0 +1,66 @@
+# Posts the checklist from a "PR checks" run as one PR comment.
+# Runs from the base branch with a write token, so it never checks out or runs PR code:
+# the downloaded pr-report artifact is untrusted data, only read as files and passed with --body-file / --input.
+name: PR comment
+
+on:
+  workflow_run:
+    workflows: ["PR checks"]
+    types: [completed]
+
+permissions:
+  pull-requests: write
+  actions: read
+
+jobs:
+  comment:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download pr-report
+        uses: actions/download-artifact@v4
+        with:
+          name: pr-report
+          path: ${{ runner.temp }}/pr-report
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Post or update the checklist comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REPORT: ${{ runner.temp }}/pr-report
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          set -euo pipefail
+          marker='<!-- vibe-research-report -->'
+          pr=$(head -c 20 "$REPORT/pr-number" | tr -d '[:space:]')
+          if ! [[ "$pr" =~ ^[1-9][0-9]{0,9}$ ]]; then echo "::error::pr-number is not a PR number"; exit 1; fi
+          # the artifact must belong to the PR whose head commit this run tested
+          pr_head=$(gh api "repos/$GH_REPO/pulls/$pr" --jq .head.sha)
+          if [ "$pr_head" != "$HEAD_SHA" ]; then echo "PR #$pr head is $pr_head, run tested $HEAD_SHA: skipping (stale run or mismatched artifact)"; exit 0; fi
+
+          body="$RUNNER_TEMP/comment.md"
+          {
+            echo "$marker"
+            head -c 50000 "$REPORT/checklist.md"
+            echo
+            echo "### Files outside \`posts/<user>/<slug>/\` (from the GitHub API, not from the PR run)"
+            echo
+            outside=$(gh api --paginate "repos/$GH_REPO/pulls/$pr/files" --jq '.[] | .filename, (.previous_filename // empty)' | grep -Ev '^posts/[^/]+/[^/]+/.' | head -n 100 || true)
+            if [ -z "$outside" ]; then echo "None."; else echo '~~~~text'; printf '%s\n' "$outside"; echo '~~~~'; fi
+            echo
+            echo "Run: $RUN_URL (conclusion: $CONCLUSION)"
+          } > "$body"
+
+          id=$(gh api --paginate "repos/$GH_REPO/issues/$pr/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n 1)
+          if [ -n "$id" ]; then
+            jq -Rs '{body: .}' "$body" > "$RUNNER_TEMP/payload.json"
+            gh api -X PATCH "repos/$GH_REPO/issues/comments/$id" --input "$RUNNER_TEMP/payload.json" > /dev/null
+            echo "updated comment $id on PR #$pr"
+          else
+            gh pr comment "$pr" --body-file "$body"
+          fi

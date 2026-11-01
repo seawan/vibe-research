@@ -41,7 +41,12 @@ Its digits go on forever. But you can guess its size with a drawing and some dot
 
 Draw a square. In one corner, draw a quarter circle: one of four equal slices of a circle. Make its straight sides reach along two sides of the square.
 
-Now imagine dropping tiny paper dots onto your drawing.
+Now imagine dropping tiny paper dots onto your drawing, without aiming. Each dot lands **at random**.
+
+> [!INTUITION]
+> **What does "random" mean?** It means you cannot know in advance where the next dot will land, but every spot on the square has the same chance. It is like rolling a fair dice: you can't guess the next roll, but each number from 1 to 6 is just as likely.
+>
+> One random result tells you very little. Flip a coin 10 times and you might get 7 heads, even though heads and tails are equally likely. Flip it 1,000 times and you will get close to half heads. Randomness is wobbly in small amounts and steady in large amounts. That is why we will use lots and lots of dots.
 
 ![A square with a quarter circle inside. The square has area 1 and the quarter circle has area π divided by 4.](square-and-circle.svg "The pizza-slice trick. The slice covers π ÷ 4 of the square, so about π ÷ 4 of the darts land on it. Multiply the fraction by 4 and you have a guess for π. {diagram}")
 

@@ -3,6 +3,7 @@
 // command's script are relative to the `upload` dir, which becomes the sandbox working directory.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDeltaSpec, commandScript } from './delta-spec.mjs';
@@ -17,6 +18,15 @@ const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const SLUG_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const isDir = (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
 const isFile = (p) => { try { return fs.statSync(p).isFile(); } catch { return false; } };
+// first existing symlink on the way from root down to root/rel, or null
+function symlinkOnPath(root, rel) {
+  let cur = root;
+  for (const part of path.normalize(rel).split(path.sep).filter((p) => p && p !== '.')) {
+    cur = path.join(cur, part);
+    try { if (fs.lstatSync(cur).isSymbolicLink()) return cur; } catch { return null; }
+  }
+  return null;
+}
 const sha256 = (p) => { try { return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex'); } catch { return null; } };
 
 // `<user>/<slug>` -> posts/<user>/<slug> inside this package (pinned by the npx ref); anything else is a path.
@@ -125,19 +135,38 @@ export async function rerun({
   const recording = mode === 'record' || (mode === 'dry-run' && record);
   const spec = loadSpec(postDir, { needPublished: !recording });
   const dest = recording ? postDir : path.resolve(outDir ?? defaultOutDir(postDir, now()));
-  const empty = { files: [], values: [] };
+  if (!recording && fs.existsSync(dest) && !isDir(dest)) throw new UsageError(`--out ${dest} is an existing file, not a directory`);
+  if (recording) {
+    const links = spec.outputs.map((o) => symlinkOnPath(postDir, path.join(spec.upload, o))).filter(Boolean);
+    if (links.length) throw new UsageError(`refusing to record through symlinks in the post folder: ${links.join(', ')}`);
+  }
 
   if (mode === 'dry-run') {
-    const p = planCommands(spec, { postDir, dest });
+    // record mode pulls into a staging dir first and moves outputs into the post only after every pull succeeded
+    const p = planCommands(spec, { postDir, dest: recording ? '<staging>' : dest });
     const commands = [p.create, p.workdir, p.upload, p.setup, p.command, p.packages, ...p.pulls.map((x) => x.args), p.kill].filter(Boolean).map(formatArgs);
     log(`delta.yaml OK (${spec.deployment}); would run:`);
     for (const c of commands) log(`  ${c}`);
-    return { ok: true, run: null, comparison: empty, commands };
+    if (recording) log(`then move the pulled outputs from <staging> into ${postDir} and write run.json`);
+    return { ok: true, run: null, comparison: { files: [], values: [] }, commands };
   }
   if (mode === 'rerun' && fs.existsSync(dest) && fs.readdirSync(dest).length) throw new UsageError(`output folder ${dest} already exists and is not empty`);
 
+  const staging = mode === 'record' ? fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-record-')) : null;
+  try {
+    return await runOnDelta({ spec, postDir, dest, staging, cli, now, signals, exit, log, warn });
+  } finally {
+    if (staging) fs.rmSync(staging, { recursive: true, force: true });
+  }
+}
+
+async function runOnDelta({ spec, postDir, dest, staging, cli, now, signals, exit, log, warn }) {
+  const recording = staging !== null;
+  const pullDest = staging ?? dest;
+  const empty = { files: [], values: [] };
   const versionOut = (await cli(['--version'])).stdout ?? '';
   const delta_cli_version = /v?\d+\.\d+\.\d+\S*/.exec(versionOut)?.[0] ?? (versionOut.trim() || null);
+  const echo = (t) => warn(String(t).replace(/\n$/, ''));
 
   // --- live sandbox section -------------------------------------------------------------
   let id = null, createP = null, killP = null, interrupted = false, signalCount = 0, rejectInterrupt;
@@ -162,18 +191,17 @@ export async function rerun({
     return killP;
   };
   const onSignal = (sig) => {
-    if (++signalCount > 1) { warn(`${sig} again: exiting now. If the sandbox is still alive: delta-cli sandbox kill ${id ?? '<sandbox_id>'}`); exit(130); return; }
+    if (++signalCount > 1) { warn(`${sig} again: exiting now. If the sandbox is still alive: delta-cli sandbox kill ${id ?? '<sandbox_id>'} (or find it with delta-cli sandbox list)`); exit(130); return; }
     interrupted = true;
-    warn(`${sig}: stopping and killing sandbox ${id ?? '(being created)'}…`);
+    warn(`${sig}: stopping and killing sandbox ${id ?? '(waiting for create to return its id)'}…`);
     rejectInterrupt(new Interrupted(sig));
   };
   signals.on('SIGINT', onSignal);
   signals.on('SIGTERM', onSignal);
 
   let killed = false, error = null, failure = null, created = {}, frame = null, started = null, finished = null, packages = [];
-  const fileStatus = [];
   try {
-    const createArgs = planCommands(spec, { postDir, dest }).create;
+    const createArgs = planCommands(spec, { postDir, dest: pullDest }).create;
     log(`$ ${formatArgs(createArgs)}`);
     createP = cli(createArgs);
     const c = await Promise.race([createP, interruptP]);
@@ -183,15 +211,15 @@ export async function rerun({
     log(`sandbox ${id} created`);
     const wd = (await step(['sandbox', 'working-directory', id])).path;
     if (!wd) throw new DeltaError('api', 'sandbox working-directory returned no data.path');
-    const plan = planCommands(spec, { postDir, dest, id, wd });
+    const plan = planCommands(spec, { postDir, dest: pullDest, id, wd });
     await call(plan.upload);
     if (plan.setup) {
-      const r = await step(plan.setup, { echo: true });
+      const r = await step(plan.setup, { echo });
       if (r.exit_code !== 0) { frame = r; failure = `setup exited with code ${r.exit_code}`; }
     }
     if (!failure) {
       started = now();
-      frame = await step(plan.command, { echo: true });
+      frame = await step(plan.command, { echo });
       finished = now();
       if (frame.exit_code !== 0) failure = `command exited with code ${frame.exit_code}`;
     }
@@ -201,11 +229,8 @@ export async function rerun({
         packages = String(r.stdout ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
       } catch (e) { if (e instanceof Interrupted) throw e; warn(`warning: could not list packages (${e.message})`); }
       for (const p of plan.pulls) {
-        const before = sha256(p.target);
         fs.mkdirSync(path.dirname(p.target), { recursive: true });
         await call(p.args);
-        const after = sha256(p.target);
-        fileStatus.push({ path: p.output, before, after });
       }
     }
   } catch (e) {
@@ -213,6 +238,11 @@ export async function rerun({
   } finally {
     // interrupted while create was in flight: wait for its id so the sandbox still gets killed
     if (!id && createP) { try { id = (await createP)?.json?.data?.sandbox_id ?? null; } catch { /* create failed */ } }
+    if (createP && !id) {
+      warn(['!! sandbox create was started but no sandbox id was obtained; a sandbox may still exist.',
+        '!! Check with:  delta-cli sandbox list --status running',
+        '!! and kill it: delta-cli sandbox kill <sandbox_id>'].join('\n'));
+    }
     killed = await killOnce();
     signals.off('SIGINT', onSignal);
     signals.off('SIGTERM', onSignal);
@@ -242,15 +272,30 @@ export async function rerun({
   }
 
   const values = compareValues(spec.expected, run.result_summary);
+  const valueTable = (title) => log('\n' + table([title, 'expected', 'got', 'ok'], values.map((v) => [v.key, show(v.expected), show(v.got), v.ok ? 'yes' : 'NO'])));
   if (recording) {
+    // every pull succeeded: now move the staged outputs into the post (never through a symlink)
+    for (const o of spec.outputs) {
+      const link = symlinkOnPath(postDir, path.join(spec.upload, o));
+      if (link) throw new Error(`refusing to write through symlink ${link}; staged outputs were discarded`);
+    }
+    const files = spec.outputs.map((o) => {
+      const target = path.join(postDir, spec.upload, o);
+      const before = sha256(target);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.copyFileSync(path.join(staging, spec.upload, o), target);
+      const after = sha256(target);
+      return { path: o, match: before === after, status: before === null ? 'new' : before === after ? 'unchanged' : 'changed' };
+    });
     fs.writeFileSync(path.join(postDir, 'run.json'), JSON.stringify(run, null, 2) + '\n');
-    const files = fileStatus.map((f) => ({ path: f.path, match: f.before === f.after, status: f.before === null ? 'new' : f.before === f.after ? 'unchanged' : 'changed' }));
     log(`\nrecorded run ${run.execution_id} (exit ${run.exit_code}, ${run.duration_s}s) -> ${path.join(postDir, 'run.json')}`);
     log(table(['output', 'status'], files.map((f) => [f.path, f.status])));
     const changed = files.filter((f) => f.status !== 'unchanged');
     if (changed.length) log(`\n${changed.length} published output(s) changed in the post folder: ${changed.map((f) => f.path).join(', ')} (review with git diff)`);
-    if (values.length) log('\n' + table(['value', 'expected', 'got', 'ok'], values.map((v) => [v.key, show(v.expected), show(v.got), v.ok ? 'yes' : 'NO'])));
-    return { ok: killed, run, comparison: { files, values } };
+    if (values.length) valueTable('value');
+    const bad = values.filter((v) => !v.ok);
+    if (bad.length) warn(`!! The recorded run does NOT match delta.yaml expected.values (${bad.map((v) => v.key).join(', ')}).\n!! run.json was written, but fix the code or the expected values before publishing.`);
+    return { ok: killed && bad.length === 0, run, comparison: { files, values } };
   }
 
   fs.writeFileSync(path.join(dest, 'run.json'), JSON.stringify(run, null, 2) + '\n');
@@ -262,7 +307,7 @@ export async function rerun({
   const short = (h) => (h ? h.slice(0, 12) : '(missing)');
   log(`\nrerun ${run.execution_id} (exit ${run.exit_code}, ${run.duration_s}s), outputs in ${dest}`);
   log(table(['output', 'published sha256', 'rerun sha256', 'match'], files.map((f) => [f.path, short(f.published), short(f.got), f.match ? 'yes' : 'NO'])));
-  if (values.length) log('\n' + table([`value (rel_tolerance ${spec.expected?.rel_tolerance ?? 0})`, 'expected', 'got', 'ok'], values.map((v) => [v.key, show(v.expected), show(v.got), v.ok ? 'yes' : 'NO'])));
+  if (values.length) valueTable(`value (rel_tolerance ${spec.expected?.rel_tolerance ?? 0})`);
   const ok = killed && files.every((f) => f.match) && values.every((v) => v.ok);
   log(`\n${ok ? 'MATCH: every output and expected value matches the published post.' : 'MISMATCH: see the table above.'}`);
   return { ok, run, comparison: { files, values } };

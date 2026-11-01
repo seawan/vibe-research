@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
 import { rerun, resolvePostDir } from '../scripts/lib/rerun.mjs';
 import { DeltaError, parseOutput, deltaCli } from '../scripts/lib/delta-cli.mjs';
 import { runCli } from '../scripts/vibe-rerun.mjs';
@@ -34,7 +35,7 @@ function twoOutputPost() {
 }
 
 // Fake delta-cli: records argv, returns canned envelopes, "pulls" by writing files.
-function fakeCli({ exitCode = 0, throwOn = {}, pulled = {}, summary = null, runBg } = {}) {
+function fakeCli({ exitCode = 0, throwOn = {}, pulled = {}, summary = null, runBg, create, failPull } = {}) {
   const calls = [];
   const cli = async (args) => {
     calls.push(args);
@@ -42,7 +43,8 @@ function fakeCli({ exitCode = 0, throwOn = {}, pulled = {}, summary = null, runB
     if (throwOn[s]) throw throwOn[s];
     switch (s) {
       case '--version': return { json: null, stdout: 'delta-cli version v1.1.17\n' };
-      case 'create': return { json: { ok: true, data: { sandbox_id: 'sb-1', image_name: flag(args, '--image-name'), cpu: flag(args, '--cpu'), memory: flag(args, '--memory'), gpu: flag(args, '--gpu') } } };
+      case 'create': if (create) return create(args);
+        return { json: { ok: true, data: { sandbox_id: 'sb-1', image_name: flag(args, '--image-name'), cpu: flag(args, '--cpu'), memory: flag(args, '--memory'), gpu: flag(args, '--gpu') } } };
       case 'working-directory': return { json: { ok: true, data: { path: '/workspace/u1/sb-1' } } };
       case 'upload': return { json: { ok: true, data: {} } };
       case 'run': return flag(args, '--command').startsWith('pip freeze')
@@ -52,6 +54,7 @@ function fakeCli({ exitCode = 0, throwOn = {}, pulled = {}, summary = null, runB
         return { json: { type: 'complete', exit_code: exitCode, execution_id: 'ex-42', stdout: '', result_summary: summary } };
       case 'pull': {
         const t = flag(args, '--target');
+        if (failPull === path.basename(t)) throw new DeltaError('not_found', `no ${failPull}`);
         fs.mkdirSync(path.dirname(t), { recursive: true });
         fs.writeFileSync(t, pulled[path.basename(t)] ?? '3\n');
         return { json: { ok: true, data: {} } };
@@ -162,9 +165,10 @@ test('record writes run.json with execution id, resources and packages', async (
     started_at: '2026-11-01T10:00:00.000Z', finished_at: '2026-11-01T10:00:05.000Z', duration_s: 5,
     exit_code: 0, delta_cli_version: 'v1.1.17', packages: ['numpy==2.1.0', 'scipy==1.14.1'], result_summary: { sum: 3 },
   });
-  // pulled into the post folder, and the change is announced
-  const pull = cli.calls.find((a) => sub(a) === 'pull');
-  assert.equal(flag(pull, '--target'), path.join(postDir, '.', 'result.txt'));
+  // pulled into a staging dir, then moved into the post folder, and the change is announced
+  const target = flag(cli.calls.find((a) => sub(a) === 'pull'), '--target');
+  assert.ok(!target.startsWith(postDir + path.sep) && target.endsWith(path.join(path.sep, 'result.txt')));
+  assert.ok(!fs.existsSync(path.dirname(target)), 'staging dir is removed');
   assert.equal(fs.readFileSync(path.join(postDir, 'result.txt'), 'utf8'), '4\n');
   assert.match(logs.join('\n'), /changed.*result\.txt|result\.txt.*changed/);
 });
@@ -270,4 +274,82 @@ test('vibe-rerun exit codes: 0 match, 1 mismatch, 2 usage, 130 interrupted', asy
   while (!cli.subs().includes('run-bg')) await new Promise((r) => setImmediate(r));
   signals.emit('SIGTERM');
   assert.equal(await p, 130);
+});
+
+test('signal while create is pending: waits for the id, kills it once, exits 130', async () => {
+  const signals = new EventEmitter();
+  let resolveCreate;
+  const cli = fakeCli({ create: () => new Promise((r) => { resolveCreate = r; }) });
+  const exits = [];
+  const warned = [];
+  const p = rerun({ postDir: FIX, mode: 'rerun', outDir: path.join(tmp(), 'o'), cli, signals, exit: (c) => exits.push(c), log: () => {}, warn: (m) => warned.push(m) });
+  while (!cli.subs().includes('create')) await new Promise((r) => setImmediate(r));
+  signals.emit('SIGINT');
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(exits, [], 'does not exit before the sandbox is killed');
+  resolveCreate({ json: { ok: true, data: { sandbox_id: 'sb-1' } } });
+  const res = await p;
+  assert.equal(res.interrupted, true);
+  assert.deepEqual(cli.calls.filter((a) => sub(a) === 'kill'), [['sandbox', 'kill', 'sb-1']]);
+  assert.deepEqual(cli.subs(), ['--version', 'create', 'kill']);
+  assert.deepEqual(exits, [130]);
+  assert.doesNotMatch(warned.join('\n'), /sandbox list/);
+});
+
+test('create without sandbox_id warns that a sandbox may exist', async () => {
+  const cli = fakeCli({ create: () => ({ json: { ok: true, data: {} } }) });
+  const warned = [];
+  await assert.rejects(rerun({ postDir: FIX, mode: 'rerun', outDir: path.join(tmp(), 'o'), cli, signals: new EventEmitter(), log: () => {}, warn: (m) => warned.push(m) }), /sandbox_id/);
+  assert.match(warned.join('\n'), /delta-cli sandbox list/);
+  assert.ok(!cli.subs().includes('kill'));
+});
+
+test('record: a failed pull leaves the post untouched', async () => {
+  const postDir = twoOutputPost();
+  const cli = fakeCli({ pulled: { 'a.txt': 'new A\n' }, failPull: 'b.txt', summary: { metrics: { err: 1.0 }, name: 'x' } });
+  await assert.rejects(rerun({ postDir, mode: 'record', cli, signals: new EventEmitter(), ...quiet }), /no b\.txt/);
+  assert.equal(fs.readFileSync(path.join(postDir, 'code', 'a.txt'), 'utf8'), 'A\n');
+  assert.ok(!fs.existsSync(path.join(postDir, 'run.json')));
+  assert.equal(sub(cli.calls.at(-1)), 'kill');
+});
+
+test('record refuses to write through a symlink in the post folder', async () => {
+  const postDir = twoOutputPost();
+  const outside = path.join(tmp(), 'outside.txt');
+  fs.writeFileSync(outside, 'keep\n');
+  fs.rmSync(path.join(postDir, 'code', 'b.txt'));
+  fs.symlinkSync(outside, path.join(postDir, 'code', 'b.txt'));
+  const cli = fakeCli();
+  await assert.rejects(rerun({ postDir, mode: 'record', cli, signals: new EventEmitter(), ...quiet }), (e) => e.exitCode === 2 && /symlink/.test(e.message));
+  assert.equal(cli.calls.length, 0);
+  assert.equal(fs.readFileSync(outside, 'utf8'), 'keep\n');
+});
+
+test('record with expected.values mismatch warns and is not ok', async () => {
+  const postDir = twoOutputPost();
+  const warned = [];
+  const cli = fakeCli({ pulled: { 'a.txt': 'A\n', 'b.txt': 'B\n' }, summary: { metrics: { err: 2.0 }, name: 'x' } });
+  const res = await rerun({ postDir, mode: 'record', cli, signals: new EventEmitter(), log: () => {}, warn: (m) => warned.push(m) });
+  assert.equal(res.ok, false);
+  assert.match(warned.join('\n'), /does NOT match delta\.yaml expected\.values \(metrics\.err\)/);
+  assert.equal(await runCli([twoOutputPost(), '--record'], { signals: new EventEmitter(), ...quiet, cli: fakeCli({ pulled: { 'a.txt': 'A\n', 'b.txt': 'B\n' }, summary: { metrics: { err: 2.0 }, name: 'x' } }) }), 1);
+});
+
+test('--out pointing at an existing file is a usage error', async () => {
+  const f = path.join(tmp(), 'file.txt');
+  fs.writeFileSync(f, 'x');
+  const cli = fakeCli();
+  assert.equal(await runCli([FIX, '--out', f], { signals: new EventEmitter(), ...quiet, cli }), 2);
+  assert.equal(cli.calls.length, 0);
+});
+
+test('deltaCli spawns detached and sends live output to the echo callback', async () => {
+  const seen = [];
+  const spawnSpy = (bin, args, opts) => { seen.push(opts); return spawn(bin, args, opts); };
+  const script = `process.stdout.write('data: {"type":"stdout","data":"hello"}\\n\\ndata: {"type":"complete","exit_code":0}\\n\\n'); process.stderr.write('progress')`;
+  const echoed = [];
+  const { json } = await deltaCli(['-e', script], { bin: process.execPath, spawnImpl: spawnSpy, echo: (t) => echoed.push(t) });
+  assert.equal(json.exit_code, 0);
+  assert.equal(seen[0].detached, true);
+  assert.deepEqual(echoed.sort(), ['hello', 'progress']);
 });

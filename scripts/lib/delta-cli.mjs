@@ -61,11 +61,26 @@ export function parseOutput(stdout, code, stderr = '') {
   return { json: null, stdout };
 }
 
-// echo: stream the sandbox command's stdout/stderr frames (and delta-cli's stderr) to our stderr.
-export function deltaCli(args, { echo = false, bin = 'delta-cli', spawnImpl = spawn } = {}) {
+// Children run in their own process group (detached) so a terminal Ctrl-C reaches only node, which then
+// waits for an in-flight `create` to return its id and kills the sandbox. They are always awaited; any still
+// running when node exits (e.g. a forced second Ctrl-C) get SIGTERM so none outlives us.
+const live = new Set();
+let exitHook = false;
+function track(child) {
+  live.add(child);
+  child.on('close', () => live.delete(child));
+  if (!exitHook) {
+    exitHook = true;
+    process.on('exit', () => { for (const c of live) { try { process.kill(-c.pid, 'SIGTERM'); } catch { try { c.kill('SIGTERM'); } catch { /* gone */ } } } });
+  }
+}
+
+// echo(text): receives the sandbox command's stdout/stderr frames and delta-cli's own stderr as they arrive.
+export function deltaCli(args, { echo = null, bin = 'delta-cli', spawnImpl = spawn } = {}) {
   return new Promise((resolve, reject) => {
     let child;
-    try { child = spawnImpl(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] }); } catch (err) { return reject(err); }
+    try { child = spawnImpl(bin, args, { stdio: ['ignore', 'pipe', 'pipe'], detached: true }); } catch (err) { return reject(err); }
+    if (child.pid) track(child);
     let out = '', err = '', pending = '';
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
@@ -80,11 +95,11 @@ export function deltaCli(args, { echo = false, bin = 'delta-cli', spawnImpl = sp
         try {
           const f = JSON.parse(m[1]);
           const text = [f.data, f.content, f.text, f.line].find((v) => typeof v === 'string');
-          if ((f.type === 'stdout' || f.type === 'stderr') && text) process.stderr.write(text.endsWith('\n') ? text : text + '\n');
+          if ((f.type === 'stdout' || f.type === 'stderr') && text) echo(text);
         } catch { /* ignore */ }
       }
     });
-    child.stderr.on('data', (chunk) => { err += chunk; if (echo) process.stderr.write(chunk); });
+    child.stderr.on('data', (chunk) => { err += chunk; if (echo) echo(chunk); });
     child.on('error', (e) => reject(e.code === 'ENOENT'
       ? new DeltaError('not_installed', `${bin} not found on PATH; install it and configure auth (https://github.com/yzailab/delta-infra-cli)`)
       : e));

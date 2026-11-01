@@ -1,15 +1,18 @@
 ---
-title: "Teaching a computer to read handwriting"
-subtitle: "We showed a small neural network 60,000 handwritten digits. After about a minute of practice on a GPU, it read new ones correctly nearly 99% of the time."
+title: "Can a computer learn to read your numbers?"
+subtitle: "We gave a computer lots of handwriting to practise on. Then we checked its answers on pictures kept out of practice."
 date: 2026-11-01
-summary: "We trained a small neural network to read handwritten digits from 0 to 9. After 5 practice rounds it read {{result.final_accuracy_pct}}% of 10,000 brand-new digits correctly. We look at how it learns and at the digits it still gets wrong."
-tags: [machine learning, neural networks, handwriting, gpu, for young readers]
+summary: "Can a computer learn to tell handwritten digits apart? We gave it examples, checked its guesses and looked closely at its mistakes. After practice, it got an average of {{result.final_accuracy_pct}}% right on pictures it never practised on."
+tags: [AI, handwriting, learning from examples, for young readers]
 code: "experiment.py"
 authors: [seawan]
 ai:
   - name: "Claude"
     model: "claude-opus-5-5"
     role: "wrote the code, ran the experiment in a Delta sandbox, made the pictures and wrote the post"
+  - name: "ChatGPT (Codex CLI)"
+    model: "gpt-6.1-sol"
+    role: "rewrote the post for young readers"
 contribution: "This is an AI vibe paper, made for children who are learning about AI. I asked for kid-friendly research posts and chose which topics to do. Claude wrote the code, ran the experiments in Delta cloud sandboxes, made the pictures and wrote the text."
 license: CC-BY-4.0
 code_license: MIT
@@ -19,89 +22,145 @@ author_verification:
   date: 2026-11-01
   checked: "I read the whole post and looked at every picture to make sure a child can follow it. I checked that the main numbers in the text match the results file from the Delta run, and that the post has the Delta-reproducible badge and run record."
 tldr:
-  - "Can a small computer program learn to read handwritten numbers just by looking at examples, without anyone writing down rules like \"a 7 has a flat top\"?"
-  - "Yes. After practising on 60,000 examples, our network read **{{result.final_accuracy_pct}}%** of 10,000 digits it had never seen. That is about {{result.mistakes_per_10000}} mistakes in 10,000."
-  - "Its mistakes are mostly digits that are messy or look like another digit. We tested one small network on one well-known set of digits, so this is not how good computers are at reading any handwriting."
+  - "Can a computer learn handwriting by looking at examples?"
+  - "After practice, it read {{result.final_accuracy_pct}}% correctly: about 124 mistakes in 10,000."
+  - "It still mixed up shapes, and we did not test words or whole pages."
 ---
 
 ## The question
 
-How do you know a "7" is a 7? You've seen thousands of them, written by different people in different ways, and somewhere along the way you just learned.
+Write a 7. Now ask someone else to write one.
 
-Now try to write down **rules** for a computer: "a 7 has a flat line at the top and a slanted line going down". Then someone writes a 7 with a little cross through the middle, or a curly top, and your rule breaks. Handwriting is too messy for rules.
+Do they look the same? Perhaps yours has a cross through the middle. Perhaps theirs has a curly top. You can probably read both.
 
-So computer scientists tried a different idea: **don't give the computer rules, give it examples**, and let it work out the rules for itself. This is called **machine learning**. We wanted to see how well it works with a small program and a set of handwritten digits.
+A **digit** is a single written sign for a number, such as 3 or 7. Our question was: **can a computer learn to read handwritten digits by looking at examples?**
 
-## How a computer can learn from examples
+Here is the game. Show the computer a picture of a digit. Ask it which digit it sees. Check its answer.
 
-We use a **neural network**, a program loosely inspired by how brain cells connect. Ours has about {{result.parameters}} adjustable numbers inside it, a bit like the knobs on a giant mixing desk.
+The **right answer** is the digit named by the picture's label. If the label says 5 and the computer says 3, that counts as a mistake.
 
-> [!INTUITION]
-> Imagine a game of "hot and cold". The network looks at a picture and guesses a digit. If the guess is wrong, every knob gets nudged a tiny bit in the direction that would have made the right answer more likely. Do that tens of thousands of times and the knobs end up in positions that read handwriting well. Nobody sets the knobs by hand.
+### A team of shape spotters
 
-Our network has two kinds of layers:
+Imagine a team solving a picture puzzle. Some teammates look for curves. Others look for corners. They pass along clues, and the team picks an answer.
 
-1. **Pattern finders** (called *convolutional* layers). They slide a tiny 3 × 3 window over the picture, looking for simple shapes such as short strokes, curves and corners, wherever they appear. A second pattern-finder layer combines those into bigger shapes like loops and crossings.
-2. **Deciders** (ordinary layers). They take all the shapes found and give a score to each digit from 0 to 9. The highest score is the network's answer.
+A **neural network** is a computer program that works a little like that team. Connected parts help turn a picture into a guess. We will call it the network.
 
-This design, pattern finders followed by deciders, was made famous by Yann LeCun and colleagues, who used it to read handwritten numbers on bank cheques [@lecun1998].
+For a computer, **training**, or **practice**, means using examples with known answers to change how the program makes guesses. It does not mean the computer is trying hard or thinking like you.
+
+Our network has adjustable settings, like knobs. During practice, it guesses, checks the label and adjusts those settings to help it give better answers.
+
+Learning from examples this way is called **machine learning**.
 
 ## What we did
 
-**The digits.** We used **MNIST**, a famous collection of handwritten digits made by the same team [@lecun1998]. It has 60,000 practice pictures and 10,000 test pictures, each 28 × 28 pixels, every one labelled with the right answer.
+### First, give it pictures
 
-![Sixteen small black-and-white pictures of handwritten digits, each with its label above it.](examples.png "Some of the practice pictures, with their labels. Notice how differently people write the same digit.")
+A **pixel** is one tiny square in a computer picture. Lots of pixels together make the strokes and spaces you see.
 
-**The practice.** The network practised on the 60,000 practice pictures in small batches of 128. After each batch it nudged its knobs using a method called Adam [@kingma2014]. One trip through all 60,000 pictures is called an **epoch**; we did {{result.epochs}} of them.
+We used a collection of handwritten digit pictures called **MNIST**. Each picture has a label giving the right answer.
 
-Here is the heart of the practice loop, from [`experiment.py`](experiment.py):
+The network had {{result.train_pictures}} pictures for practice. Here are some:
+
+![Sixteen small black-and-white pictures of handwritten digits, with the correct digit shown above each.](examples.png "Try covering the labels and guessing the digits yourself. Notice how differently people write the same digit.")
+
+### Then, practise and check
+
+One trip through all the practice pictures is called an **epoch**. Think of it as a practice round. Each network completed {{result.epochs}} rounds.
+
+We kept another {{result.test_pictures}} pictures apart. This separate collection is called the **test set**.
+
+The network never practises on the test set. Those pictures do not guide its adjustments. That lets us check whether it can read examples beyond the ones used for practice.
+
+It is like practising spelling with one list, then being checked on a different list.
+
+After each round, we measured **accuracy**: how many pictures out of 100 the network reads correctly. A percentage is a way to say “out of 100.”
+
+### Try it again
+
+The network's starting settings involve **random** choices. Random means chance helps decide what happens, like rolling dice or tossing a coin.
+
+Different starts might lead to different results. So we ran 3 separate tries and compared them.
+
+> [!NOTE]
+> **For grown-ups.** The network used convolutional layers to detect patterns, followed by layers that scored the possible digits. This approach builds on handwriting-recognition work by LeCun and colleagues [@lecun1998]. It had {{result.parameters}} adjustable parameters and used Adam to update them [@kingma2014].
+>
+> The practice loop is included below.
 
 @include experiment.py#L121-L126
 
-In words: pick a batch of pictures, see how wrong the network's answers are (the "loss"), work out which way to nudge every knob, and nudge them.
-
-**The test.** After every epoch we tested the network on the 10,000 test pictures. It **never** practises on these, so they show how well it reads handwriting it has never seen, like a surprise spelling test.
-
-**Fair comparison.** A network starts with random knob positions, so we trained 3 separate networks from 3 different random starts and report the average.
-
-**Where it ran.** We ran it on a GPU in a Delta cloud sandbox (an {{result.device}}). All three networks together took {{result.seconds}} seconds, including downloading the pictures. All the scores are in [`results.csv`](results.csv).
+> [!NOTE]
+> **For grown-ups.** All 3 runs together took {{result.seconds}} seconds, including downloading the pictures, on an {{result.device}} graphics processor in a Delta cloud sandbox. The recorded scores are in [results.csv](results.csv), and the code is in [experiment.py](experiment.py).
 
 ## Results
 
-The network learned fast. After just one epoch it already read {{result.accuracy_after_1_epoch_pct}}% of the test pictures correctly, and by the end it reached **{{result.final_accuracy_pct}}%**.
+After the first practice round, the networks read an average of {{result.accuracy_after_1_epoch_pct}}% correctly.
 
-![A chart with three lines, one per try, rising from about 97.5% after the first epoch to about 98.5–99% after the fifth.](learning.png "Test accuracy after each epoch, for 3 networks trained from different random starts. The scale starts at 97%, so small differences look big here: the three tries end up within half a percentage point of each other.")
+After the last round, the average was **{{result.final_accuracy_pct}}% correct**.
 
-| | |
-|---|---|
-| Test pictures | {{result.test_pictures}} |
-| Read correctly (average of 3 tries) | {{result.final_accuracy_pct}}% (± {{result.final_accuracy_spread_pct}}) |
-| Mistakes per 10,000 | about {{result.mistakes_per_10000}} |
-| Adjustable numbers in the network | {{result.parameters}} |
+What does that mean for {{result.test_pictures}} pictures? **About {{result.mistakes_per_10000}} answers were wrong.** That is an average across the 3 tries, so each try did not make exactly the same number of mistakes.
+
+Here is how the tries changed during practice. Every score is a percentage: higher means more correct answers.
+
+| Practice round | Try 1 | Try 2 | Try 3 |
+|---|---:|---:|---:|
+| 1 | 97.61% | 97.21% | 97.46% |
+| 2 | 98.30% | 97.90% | 98.20% |
+| 3 | 98.68% | 98.50% | 98.80% |
+| 4 | 98.98% | 98.69% | 98.69% |
+| 5 | 98.87% | 98.50% | 98.91% |
+
+![A chart showing the percentage of correct test answers after each practice round for the 3 tries.](learning.png "All 3 tries improved overall. Watch the scale: it starts at 97%, which makes small changes look large.")
+
+Two tries got slightly worse after the last round. The other improved. More practice did not improve every score.
+
+We cannot tell from these results alone why the scores dipped. The networks might have become too used to the practice pictures. Or these might just be small ups and downs.
 
 > [!TAKEAWAY]
-> Without being given a single rule, a small network that practised on examples for about a minute read {{result.final_accuracy_pct}}% of brand-new handwritten digits correctly.
+> Learning from examples helped this network read most of the test digits correctly. It still made about {{result.mistakes_per_10000}} mistakes in 10,000 pictures.
 
-### What does it get wrong?
+### Compare the guesses with the truth
 
-The most interesting part is the mistakes. Here are some test digits the first network got wrong, with the real answer ("is") and the network's answer ("said"):
+Now for the detective work. Where did it go wrong?
 
-![Sixteen handwritten digits the network misread, each labelled with the true digit and the network's answer.](mistakes.png "Some of the test digits the network got wrong. Many are messy, cut off or written in an unusual style, and a few might fool a person too.")
+In the next picture, **“is” gives the right answer from the label**. **“said” gives the network's answer**. These are mistakes from the first try.
 
-And here is which digits got mixed up with which, adding up the mistakes of all 3 networks. Each row is the real digit; each column is what the network said. Darker squares mean more mix-ups.
+Look at each pair. Can you see a shape that might have led to the wrong guess?
 
-![A 10 by 10 grid. Most squares are empty or pale; a few are darker, showing the digit pairs that get confused most often.](mixups.png "Mix-ups between digits, added up over the 3 networks. Empty squares mean that mix-up never happened.")
+![Sixteen digits the first network misread, each marked with the right answer, “is,” and the network's guess, “said.”](mistakes.png "Compare “is” with “said” above each picture. Every pair shows a wrong guess. Some handwriting looks unusual or hard to read.")
 
-What to notice:
+Some of these pictures look tricky. But looking at a few mistakes cannot tell us the cause of every wrong answer.
 
-1. **Mistakes are rare and not random.** The most common mix-up was "{{result.most_common_mixup}}" ({{result.most_common_mixup_count}} times across the 3 networks). Digits that share shapes get confused most: 5 read as 3, a thin 2 read as 1, and 4, 7 and 9 swapped with each other. Digits that look nothing alike, like 0 and 1, were almost never mixed up.
-2. **Many mistakes are understandable.** Looking at the misread digits, a lot of them are scrawled, squashed or unusually shaped. Some are hard for a person too.
-3. **More practice isn't always better.** Two of the three networks did slightly *worse* on the test after the 5th epoch than after the 4th. That might be the start of memorising the practice pictures instead of learning general shapes, or just small ups and downs; we didn't measure which. Scientists watch for this and stop practice at the right time.
-4. **Different starts, same result.** The three networks ended within {{result.final_accuracy_spread_pct}} percentage points of each other, so the result isn't just luck.
+### Which digits got mixed up?
 
-## What this does (and doesn't) show
+The next picture groups the mistakes from all 3 tries.
 
-- **These digits are tidy.** MNIST digits are centred, cut out neatly and scaled to the same size. Real handwriting on an envelope or a whiteboard is much harder, and our network would do worse on it. We did not test that.
-- **One small network.** Bigger networks, more practice and tricks like slightly wiggling the practice pictures can do better than ours. We did not try them.
-- **99% is not 100%.** About {{result.mistakes_per_10000}} mistakes in 10,000 sounds tiny, but for something like reading amounts on bank cheques, even a few mistakes matter. Real systems also say "I'm not sure" and ask a person.
-- **It doesn't "understand" numbers.** The network matches shapes. It has no idea that 7 is bigger than 3, or what counting is.
+Read a row to find **what the digit really was**. Read a column to find **what the network said**. A darker square means that mix-up happened more often.
+
+![A grid comparing the real digit in each row with the network's answer in each column. Darker squares show more frequent mistakes.](mixups.png "Mistakes added together across all 3 tries. Empty squares mean that particular mix-up never happened.")
+
+Here are the listed mix-ups in words, so you can compare truth and guess directly:
+
+| What the digit really was | What the network said | Times across all 3 tries |
+|---|---|---:|
+| 5 | 3 | 23 |
+| 2 | 1 | 20 |
+| 9 | 4 | 17 |
+| 4 | 9 | 16 |
+| 9 | 7 | 16 |
+| 2 | 7 | 14 |
+
+The most common mix-up was a real **5** read as **3**. It happened **23 times across the 3 tries**.
+
+Shared curves or strokes might help explain some mistakes. The counts tell us which mix-ups happened, but they do not prove why.
+
+## What this tells us—and what it leaves open
+
+The network did well on this collection of separate digit pictures. The pictures were already placed near the centre and made the same size.
+
+We did not test scribbles on an envelope, whole pages or words. These results do not tell us how well it would read those.
+
+We also did not compare lots of different network designs. We tried this design from 3 starting points.
+
+And reading a digit is different from understanding a number. This game checked whether the network could match a picture to a label. It did not check counting, adding or knowing which number is bigger.
+
+You can try the picture game yourself. Cover the labels, make your guesses, then uncover the answers. Which shapes fooled you?

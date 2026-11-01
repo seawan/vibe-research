@@ -1,5 +1,6 @@
 // Readable HTML views of the files shipped with a post: source code, CSV tables and Jupyter notebooks.
 import hljs from 'highlight.js';
+import { esc } from './lib/sections.mjs';
 
 export const CODE_LANGS = {
   '.py': 'python', '.js': 'javascript', '.mjs': 'javascript', '.ts': 'typescript', '.sh': 'bash',
@@ -9,8 +10,6 @@ export const CODE_LANGS = {
 };
 const LANG_NAMES = { python: 'Python', javascript: 'JavaScript', typescript: 'TypeScript', bash: 'Shell', r: 'R', julia: 'Julia', matlab: 'MATLAB', c: 'C', cpp: 'C++', rust: 'Rust', go: 'Go', java: 'Java', latex: 'LaTeX', json: 'JSON', yaml: 'YAML', ini: 'TOML', sql: 'SQL', plaintext: 'Text' };
 const MAX_BYTES = 2_000_000;
-
-const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /** Which viewer (if any) a file gets: 'code' | 'csv' | 'notebook' | null. */
 export function viewerKind(name, size) {
@@ -93,10 +92,12 @@ function renderOutput(o) {
   if (o.output_type === 'stream') return `<pre class="nb-out${o.name === 'stderr' ? ' nb-stderr' : ''}">${esc(stripAnsi(joinSrc(o.text)))}</pre>`;
   if (o.output_type === 'error') return `<pre class="nb-out nb-err">${esc(stripAnsi((o.traceback ?? []).join('\n')))}</pre>`;
   const d = o.data ?? {};
-  if (d['image/png']) return `<div class="nb-img"><img src="data:image/png;base64,${joinSrc(d['image/png']).replace(/\s/g, '')}" alt="cell output"></div>`;
-  if (d['image/jpeg']) return `<div class="nb-img"><img src="data:image/jpeg;base64,${joinSrc(d['image/jpeg']).replace(/\s/g, '')}" alt="cell output"></div>`;
-  if (d['image/svg+xml']) return `<div class="nb-img">${joinSrc(d['image/svg+xml'])}</div>`;
-  if (d['text/html']) return `<div class="nb-html table-wrap">${joinSrc(d['text/html'])}</div>`;
+  // notebook outputs are untrusted: images only as validated base64 data URLs, SVG only via <img>, HTML never inlined
+  const img = (type, b64) => (/^[A-Za-z0-9+/=]*$/.test(b64) ? `<div class="nb-img"><img src="data:${type};base64,${b64}" alt="cell output"></div>` : '<p class="meta">[image omitted]</p>');
+  if (d['image/png']) return img('image/png', joinSrc(d['image/png']).replace(/\s/g, ''));
+  if (d['image/jpeg']) return img('image/jpeg', joinSrc(d['image/jpeg']).replace(/\s/g, ''));
+  if (d['image/svg+xml']) return `<div class="nb-img"><img src="data:image/svg+xml;base64,${Buffer.from(joinSrc(d['image/svg+xml'])).toString('base64')}" alt="SVG output"></div>`;
+  if (d['text/html'] && !d['text/plain']) return `<pre class="nb-out">${esc(joinSrc(d['text/html']))}</pre>`;
   if (d['text/plain']) return `<pre class="nb-out">${esc(stripAnsi(joinSrc(d['text/plain'])))}</pre>`;
   return '';
 }
@@ -112,7 +113,7 @@ export function renderNotebook(text, mdToHtml) {
     if (c.cell_type !== 'code') return '';
     nCode++;
     const outputs = (c.outputs ?? []).map(renderOutput).join('');
-    return `<div class="nb-cell"><div class="nb-prompt">In [${c.execution_count ?? ' '}]</div><pre class="nb-src"><code class="hljs">${highlight(src, lang)}</code></pre>${outputs ? `<div class="nb-outputs">${outputs}</div>` : ''}</div>`;
+    return `<div class="nb-cell"><div class="nb-prompt">In [${Number.isInteger(c.execution_count) ? c.execution_count : ' '}]</div><pre class="nb-src"><code class="hljs">${highlight(src, lang)}</code></pre>${outputs ? `<div class="nb-outputs">${outputs}</div>` : ''}</div>`;
   }).join('\n');
   return { html: `<div class="notebook">${cells}</div>`, summary: `Jupyter notebook · ${nCode} code cells` };
 }

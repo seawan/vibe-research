@@ -10,14 +10,16 @@ export const safeUrl = (href) => {
   const scheme = /^([^/?#]*?):/.exec(h);
   return !scheme || /^(https?|mailto)$/i.test(scheme[1]);
 };
+// front-matter list fields may be any YAML type in a broken post: treat non-lists as empty
+export const list = (x) => (Array.isArray(x) ? x : []);
 const day = (d) => (d instanceof Date ? (isNaN(d) ? '' : d.toISOString().slice(0, 10)) : String(d ?? '').slice(0, 10));
 const h2 = (id, html) => `<h2 id="${id}"><a class="anchor" href="#${id}">#</a>${html}</h2>`;
 
 export function aiProcessBox(fm = {}, chatFiles = []) {
-  const rows = (fm.ai ?? []).map((a) => `<li><strong>${esc(a.name)}</strong> <code>${esc(a.model)}</code> <span class="ai-role">${esc(a.role)}</span></li>`).join('');
+  const rows = list(fm.ai).map((a) => `<li><strong>${esc(a?.name)}</strong> <code>${esc(a?.model)}</code> <span class="ai-role">${esc(a?.role)}</span></li>`).join('');
   const links = [
     ...chatFiles.map((f) => `<a href="${esc(f)}">${esc(f)}</a>`),
-    ...(fm.chat_links ?? []).map((u) => `<a href="${esc(u)}" rel="noopener">${esc(u)}</a>`),
+    ...list(fm.chat_links).map((u) => (safeUrl(u) ? `<a href="${esc(u)}" rel="noopener">${esc(u)}</a>` : `<code>${esc(u)}</code>`)),
   ];
   return `<aside class="box ai-box"><div class="callout-label">AI &amp; process</div>
 <ul class="ai-list">${rows}</ul>
@@ -76,7 +78,7 @@ export function reproduceBox({ spec, run, badge, reasons = [], id, commit, repo 
 }
 
 export function bylineHtml(authors = [], rel = '') {
-  return `<span class="byline">${authors.map((u) => `<a class="author" href="${esc(rel)}@${esc(u)}/"><img class="avatar" src="https://github.com/${esc(u)}.png?size=64" alt="" width="24" height="24" loading="lazy">@${esc(u)}</a>`).join(' ')}</span>`;
+  return `<span class="byline">${list(authors).map((u) => `<a class="author" href="${esc(rel)}@${esc(u)}/"><img class="avatar" src="https://github.com/${esc(u)}.png?size=64" alt="" width="24" height="24" loading="lazy">@${esc(u)}</a>`).join(' ')}</span>`;
 }
 
 export function updatedHtml(date, postDate, repo, id) {

@@ -194,7 +194,7 @@ function postPage(post) {
     `<time datetime="${isoDate(fm.date)}">${fmtDate(fm.date)}</time>`,
     updated,
     `${post.minutes} min read`,
-    fm.code ? `<a href="${esc(post.viewerHref(fm.code))}">code &amp; data</a>` : '',
+    typeof fm.code === 'string' && fm.code ? `<a href="${esc(post.viewerHref(fm.code))}">code &amp; data</a>` : '',
     delta.badge ? '<span class="badge badge-ok" title="Rerunnable with delta-cli">✓ Delta-reproducible</span>' : '',
     fm.draft ? '<span class="draft-badge">DRAFT</span>' : '',
   ].filter(Boolean).join(' · ');
@@ -213,7 +213,7 @@ ${toc}
 ${body}
 </div>
 ${renderFileList(post.files)}
-${verificationBox(fm.author_verification)}
+${verificationBox(fm.author_verification ?? {})}
 ${renderBibliography(post.order, post.refs)}
 ${reproduceBox({ spec: delta.spec, run: delta.run, badge: delta.badge, reasons: delta.reasons, id: post.id, commit: post.commit.sha, repo: site.repo })}
 ${fm.ai_disclosure !== false ? `<p class="disclosure">This is a “vibe research” report: the experiments and the write-up were produced with help from an AI assistant and checked by the author. Numbers come from the linked code and data; references were machine-verified.</p>` : ''}
@@ -310,6 +310,12 @@ function loadPost(id) {
   for (const field of ['title', 'date']) if (!fm[field]) errors.push(`${id}: front matter is missing "${field}"`);
   // schema: errors, or warnings for drafts
   for (const m of validatePost({ fm, markdown: content, folderUser: user, files: listAll(dir) })) (fm.draft ? warnings : errors).push(`${id}: ${m}`);
+  // wrong-typed list fields would crash rendering: always an error, then rendered as empty
+  for (const k of ['authors', 'ai', 'tags', 'chat_links', 'outputs', 'tldr']) {
+    if (fm[k] != null && !Array.isArray(fm[k])) { errors.push(`${id}: ${k}: must be a list`); fm[k] = []; }
+  }
+  if (Array.isArray(fm.ai) && fm.ai.some((a) => !a || typeof a !== 'object')) { errors.push(`${id}: ai: every entry must be a { name, model, role } map`); fm.ai = fm.ai.filter((a) => a && typeof a === 'object'); }
+  if (fm.date && isNaN(new Date(fm.date))) { errors.push(`${id}: date: not a valid date`); fm.date = new Date(0); }
   // delta.yaml + run.json, figure provenance: errors, or warnings for drafts
   const report = (m) => (fm.draft ? warnings : errors).push(`${id}: ${m}`);
   let spec = null, run = null, specOk = false;
@@ -329,7 +335,12 @@ function loadPost(id) {
   checkFigures({ figures, outputs: Array.isArray(spec?.outputs) ? spec.outputs : fm.outputs ?? [], upload: typeof spec?.upload === 'string' ? spec.upload : '.' }).forEach(report);
   const delta = { spec: specOk ? spec : null, run, ...computeBadge({ postDir: dir, spec: specOk ? spec : null, run, figures }) };
   const refsPath = path.join(dir, 'refs.json');
-  const refList = fs.existsSync(refsPath) ? JSON.parse(fs.readFileSync(refsPath, 'utf8')) : [];
+  let refList = [];
+  if (fs.existsSync(refsPath)) {
+    try { refList = JSON.parse(fs.readFileSync(refsPath, 'utf8')); } catch (e) { errors.push(`${id}: refs.json: invalid JSON (${e.message})`); }
+    if (!Array.isArray(refList)) { errors.push(`${id}: refs.json: must be a list of references`); refList = []; }
+    refList = refList.filter((r) => r && typeof r === 'object' && typeof r.key === 'string');
+  }
   const refs = Object.fromEntries(refList.map((r) => [r.key, r]));
 
   const files = collectFiles(dir, id);
@@ -378,7 +389,8 @@ export function buildSite({ postsDir = path.join(ROOT, 'posts'), outDir = path.j
 
   const subdirs = (d) => (fs.existsSync(d) ? fs.readdirSync(d, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.name.startsWith('.')).map((e) => e.name).sort() : []);
   const ids = subdirs(POSTS).flatMap((u) => subdirs(path.join(POSTS, u)).filter((s) => fs.existsSync(path.join(POSTS, u, s, 'index.md'))).map((s) => `${u}/${s}`));
-  const posts = ids.map(loadPost)
+  // last-resort guard: an unexpected crash in one post is that post's error, not the whole build's
+  const posts = ids.map((id) => { try { return loadPost(id); } catch (e) { errors.push(`${id}: could not be built (${e.message})`); return null; } }).filter(Boolean)
     .filter((p) => INCLUDE_DRAFTS || !p.fm.draft)
     .sort((a, b) => new Date(b.fm.date) - new Date(a.fm.date));
 

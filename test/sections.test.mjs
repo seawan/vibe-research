@@ -168,3 +168,12 @@ test('reproduce box omits missing resource parts', () => {
   assert.ok(!html.includes('undefined'));
   assert.ok(html.includes('2Gi memory'));
 });
+
+test('aiProcessBox: unsafe chat_links render as text, not links; non-list fields do not crash', async () => {
+  const { aiProcessBox } = await import('../scripts/lib/sections.mjs');
+  const html = aiProcessBox({ ai: [], contribution: 'x', chat_links: ['javascript:alert(1)', 'https://ok.example/c'] });
+  assert.ok(!html.includes('href="javascript:'));
+  assert.ok(html.includes('javascript:alert(1)'));
+  assert.ok(html.includes('href="https://ok.example/c"'));
+  assert.doesNotThrow(() => aiProcessBox({ ai: 'Claude', chat_links: 'https://x' }));
+});

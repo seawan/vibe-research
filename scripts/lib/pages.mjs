@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { esc, bylineHtml } from './sections.mjs';
+import { esc, bylineHtml, list as asList } from './sections.mjs';
 
 const site = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../../site.config.json'), 'utf8'));
 export const siteRoot = site.siteUrl.replace(/\/$/, '') + (site.baseUrl.endsWith('/') ? site.baseUrl : site.baseUrl + '/');
@@ -22,8 +22,8 @@ const newestFirst = (posts) => [...posts].sort((a, b) => new Date(b.fm.date) - n
 // rel = path prefix back to the site root ('' home, '../' author page, '../../' tag page)
 export function postCard(post, rel = '') {
   const { fm } = post;
-  const ai = (fm.ai ?? []).map((a) => a.name);
-  const tags = (fm.tags ?? []).filter((t) => tagSlug(t)).map((t) => `<a class="tag" href="${esc(rel)}tags/${esc(tagSlug(t))}/">${esc(t)}</a>`).join('');
+  const ai = asList(fm.ai).map((a) => a?.name);
+  const tags = asList(fm.tags).filter((t) => tagSlug(t)).map((t) => `<a class="tag" href="${esc(rel)}tags/${esc(tagSlug(t))}/">${esc(t)}</a>`).join('');
   const chips = ai.map((n) => `<span class="ai-chip">${esc(n)}</span>`).join('');
   return `<li class="post-item" data-id="${esc(post.id)}" data-ai="${esc(ai.map(aiToken).join(' '))}" data-badge="${post.delta?.badge ? 1 : 0}">
   <a class="post-link" href="${esc(rel)}posts/${esc(post.id)}/">${post.inline(fm.title)}</a>
@@ -35,7 +35,7 @@ export function postCard(post, rel = '') {
 
 function filterBar(posts, rel) {
   const names = new Map();
-  for (const p of posts) for (const a of p.fm.ai ?? []) names.set(aiToken(a.name), a.name);
+  for (const p of posts) for (const a of asList(p.fm.ai)) if (a?.name) names.set(aiToken(a.name), a.name);
   const chips = [...names].map(([tok, n]) => `<button type="button" class="filter-chip" data-ai-filter="${esc(tok)}" aria-pressed="false">${esc(n)}</button>`).join('');
   return `<div class="filters" data-search-url="${esc(rel)}search.json">
   <input type="search" class="search-box" placeholder="Search title, summary, tags, authors, AI…" aria-label="Search posts">
@@ -80,9 +80,9 @@ export function searchIndex(posts) {
     title: plain(p.fm.title),
     subtitle: plain(p.fm.subtitle),
     summary: plain(p.fm.summary),
-    tags: p.fm.tags ?? [],
-    authors: p.fm.authors ?? [],
-    ai: (p.fm.ai ?? []).map((a) => a.name),
+    tags: asList(p.fm.tags),
+    authors: asList(p.fm.authors),
+    ai: asList(p.fm.ai).map((a) => a?.name),
     url: `posts/${p.id}/`,
   }));
 }
@@ -106,8 +106,8 @@ export function sitePages(posts) {
   const tags = new Map(), authors = new Map();
   const add = (m, k, name, p) => { if (!m.has(k)) m.set(k, { name, posts: [] }); m.get(k).posts.push(p); };
   for (const p of ps) {
-    for (const t of p.fm.tags ?? []) if (tagSlug(t)) add(tags, tagSlug(t), t, p);
-    for (const a of p.fm.authors ?? []) add(authors, a, a, p);
+    for (const t of asList(p.fm.tags)) if (tagSlug(t)) add(tags, tagSlug(t), t, p);
+    for (const a of asList(p.fm.authors)) add(authors, a, a, p);
   }
   for (const [slug, { name, posts: tp }] of tags) out.push({ file: `tags/${slug}/index.html`, title: `#${name} · ${site.title}`, depth: 2, body: tagPage(name, tp), url: `${siteRoot}tags/${slug}/` });
   for (const [user, { posts: ap }] of authors) {

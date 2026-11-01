@@ -353,3 +353,24 @@ test('deltaCli spawns detached and sends live output to the echo callback', asyn
   assert.equal(seen[0].detached, true);
   assert.deepEqual(echoed.sort(), ['hello', 'progress']);
 });
+
+test('SIGHUP kills the sandbox once and exits 130, even if writes to the dead terminal throw', async () => {
+  const signals = new EventEmitter();
+  let release;
+  const cli = fakeCli({ runBg: () => new Promise((r) => { release = r; }) });
+  const exits = [];
+  let hung = false;
+  const dead = () => { if (hung) throw Object.assign(new Error('write EIO'), { code: 'EIO' }); };
+  const p = rerun({ postDir: FIX, mode: 'rerun', outDir: path.join(tmp(), 'o'), cli, signals, exit: (c) => exits.push(c), log: dead, warn: dead });
+  while (!cli.subs().includes('run-bg')) await new Promise((r) => setImmediate(r));
+  assert.equal(signals.listenerCount('SIGHUP'), 1);
+  hung = true;
+  signals.emit('SIGHUP');
+  const res = await p;
+  release({ json: { type: 'complete', exit_code: 0 } });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(cli.subs().filter((s) => s === 'kill').length, 1);
+  assert.deepEqual(exits, [130]);
+  assert.equal(res.interrupted, true);
+  for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) assert.equal(signals.listenerCount(s), 0, s);
+});

@@ -1,5 +1,5 @@
 // Record (author) or rerun (reader) a post's experiment on Delta, following its delta.yaml.
-// One sandbox per call, always killed (finally + SIGINT/SIGTERM). Paths in `outputs` and the
+// One sandbox per call, always killed (finally + SIGINT/SIGTERM/SIGHUP). Paths in `outputs` and the
 // command's script are relative to the `upload` dir, which becomes the sandbox working directory.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -161,6 +161,10 @@ export async function rerun({
 }
 
 async function runOnDelta({ spec, postDir, dest, staging, cli, now, signals, exit, log, warn }) {
+  // after a signal the terminal may be gone (SIGHUP): a failing write (EIO/EPIPE) must not stop the kill
+  let shuttingDown = false;
+  const guard = (f) => (m) => { if (!shuttingDown) return f(m); try { f(m); } catch { /* terminal gone */ } };
+  log = guard(log); warn = guard(warn);
   const recording = staging !== null;
   const pullDest = staging ?? dest;
   const empty = { files: [], values: [] };
@@ -191,13 +195,15 @@ async function runOnDelta({ spec, postDir, dest, staging, cli, now, signals, exi
     return killP;
   };
   const onSignal = (sig) => {
+    if (!shuttingDown && signals === process) for (const st of [process.stdout, process.stderr]) st.on('error', () => {});
+    shuttingDown = true;
     if (++signalCount > 1) { warn(`${sig} again: exiting now. If the sandbox is still alive: delta-cli sandbox kill ${id ?? '<sandbox_id>'} (or find it with delta-cli sandbox list)`); exit(130); return; }
     interrupted = true;
     warn(`${sig}: stopping and killing sandbox ${id ?? '(waiting for create to return its id)'}…`);
     rejectInterrupt(new Interrupted(sig));
   };
-  signals.on('SIGINT', onSignal);
-  signals.on('SIGTERM', onSignal);
+  const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+  for (const sig of SIGNALS) signals.on(sig, onSignal);
 
   let killed = false, error = null, failure = null, created = {}, frame = null, started = null, finished = null, packages = [];
   try {
@@ -244,8 +250,7 @@ async function runOnDelta({ spec, postDir, dest, staging, cli, now, signals, exi
         '!! and kill it: delta-cli sandbox kill <sandbox_id>'].join('\n'));
     }
     killed = await killOnce();
-    signals.off('SIGINT', onSignal);
-    signals.off('SIGTERM', onSignal);
+    for (const sig of SIGNALS) signals.off(sig, onSignal);
   }
   if (interrupted) { exit(130); return { ok: false, interrupted: true, run: null, comparison: empty }; }
   if (error) throw error;

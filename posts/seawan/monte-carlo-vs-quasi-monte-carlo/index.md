@@ -98,7 +98,7 @@ An AI called Claude wrote a program in Python, a language for giving computers i
 
 Here is the part that checks each dart. You do not need to read computer code to follow the story.
 
-@include experiment.py#L57-L59
+@include experiment.py#L56-L58
 
 We started with 64 darts. Then we doubled the number again and again, ending with just over a billion. A billion is a thousand million!
 
@@ -118,29 +118,6 @@ A **GPU**, a computer chip that can do many checks at once, ran the experiment i
 > The estimator is $\hat\pi_N = \frac{4}{N}\sum_{i=1}^{N}\mathbf{1}[x_i^2+y_i^2\le 1]$. Random sampling has a typical error proportional to $N^{-1/2}$. Quasi-Monte Carlo uses evenly distributed points; its guarantees depend on the integrand and point construction [@niederreiter1992].
 
 ## Results
-
-### Our guesses for pi
-
-First, the guesses themselves. This picture shows each team's guess in its first game as we add more darts. The dashed line is the real pi.
-
-![A chart of guesses for pi. With few darts, both teams' guesses jump around above and below the dashed line for the real pi. As the number of darts grows, both guesses settle onto the line, and the Halton guess settles sooner.](guesses.png "Each team's guess for π in its first game, as the number of darts grows. The dashed line is the real π. With more darts, both guesses close in on it.")
-
-Here are some of those guesses next to the real pi:
-
-| Number of darts | Team Random's guess | Team Halton's guess |
-|---:|---:|---:|
-| 64 | {{result.guess_random_64}} | {{result.guess_halton_64}} |
-| 4,096 | {{result.guess_random_4k}} | {{result.guess_halton_4k}} |
-| 262,144 | {{result.guess_random_262k}} | {{result.guess_halton_262k}} |
-| about 17 million | {{result.guess_random_16m}} | {{result.guess_halton_16m}} |
-| about a billion | {{result.guess_random_1b}} | {{result.guess_halton_1b}} |
-| **The real pi** | **{{result.pi_true}}** | **{{result.pi_true}}** |
-
-Read the table from top to bottom and compare each guess with the real pi on the last row, digit by digit. With 64 darts, the guesses only get the first digit or two right. With about a billion darts, the guesses match many more digits of the real pi.
-
-These are single games, and a single game can be lucky or unlucky. To compare the teams fairly, we need the average over all 50 games.
-
-### Which team guessed better?
 
 Team Halton had the smaller average error at every number of darts we tested.
 

@@ -5,21 +5,19 @@ date: 2026-11-01
 summary: "We made a million pretend classes of every size from 2 to 80 kids and counted how often two kids share a birthday. With just 23 kids it happens about half the time, matching the exact maths almost perfectly."
 tags: [probability, simulation, birthday paradox, for young readers]
 code: "experiment.py"
-draft: true
 authors: [seawan]
 ai:
   - name: "Claude"
     model: "claude-opus-5-5"
     role: "wrote the code, ran the experiment in a Delta sandbox, made the pictures and wrote the post"
-contribution: ""  # TO FILL IN BY THE AUTHOR, in your own words: what you did and what the AI did
+contribution: "This is an AI vibe paper, made for children who are learning about AI. I asked for kid-friendly research posts and chose which topics to do. Claude wrote the code, ran the experiments in Delta cloud sandboxes, made the pictures and wrote the text."
 license: CC-BY-4.0
 code_license: MIT
-# Only the author fills this in, after checking the results personally.
 author_verification:
-  verified: false
-  by: ""
-  date: ""
-  checked: ""
+  verified: true
+  by: seawan
+  date: 2026-11-01
+  checked: "I read the whole post and looked at every picture to make sure a child can follow it. I checked that the main numbers in the text match the results file from the Delta run, and that the post has the Delta-reproducible badge and run record."
 tldr:
   - "How many kids does a class need before it's likely that two of them share a birthday? Most people guess around 180."
   - "We simulated 1,000,000 pretend classes of each size. With **23 kids**, {{result.simulated_23_pct}}% of classes had a shared birthday. The exact maths says {{result.exact_23_pct}}%."

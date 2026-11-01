@@ -136,3 +136,35 @@ test('specs inserted before experiment heading', () => {
   assert.deepEqual([...order].sort((a, b) => a - b), order);
   assert.ok(html.includes('href="#specs"'));
 });
+
+test('unsafe link and image schemes render as plain text', () => {
+  const bad = ['javascript:alert(1)', ' JaVaScRiPt:alert(2)', 'vbscript:x', 'data:text/html,<b>x</b>', 'java\tscript:alert(3)', 'java&#115;cript:alert(4)', '&#x6A;avascript&colon;alert(5)'];
+  const md = '\n' + bad.map((u, i) => `[link${i}](<${u}>)`).join('\n\n') + '\n\n<javascript:alert(9)>\n\n![img](<data:image/svg+xml,x>)\n\n[ok](https://example.com) [rel](add.py) [frag](#x)\n';
+  const { html } = buildVariant((d) => {
+    appendBody(md)(d);
+    const f = path.join(d, 'index.md');
+    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('title: "Hello, Vibe Research"', 'title: "[t](javascript:alert(5))"\nsubtitle: "[s](vbscript:x)"'));
+  });
+  assert.ok(!/(?:href|src)="\s*(?:javascript|vbscript|data|java)/i.test(html), 'unsafe URL in an attribute');
+  assert.ok(html.includes('link0') && html.includes('link1'));
+  assert.ok(html.includes('href="https://example.com"') && html.includes('href="#x"') && html.includes('href="add.py.html"'));
+});
+
+test('citations are never raw html: link titles, code spans, includes', () => {
+  const { html, result } = buildVariant((d) => {
+    fs.writeFileSync(path.join(d, 'inc.py'), 'print("0")\n');
+    fs.appendFileSync(path.join(d, 'index.md'), '\n[x](https://example.com "t [@knuth97]")\n\nCode `[@knuth97]` here.\n\n[@knuth97]\n\n@include inc.py\n');
+  });
+  assert.deepEqual(result.errors, []);
+  assert.ok(!/title="[^"]*<span/.test(html));
+  assert.ok(html.includes('<code>[@knuth97]</code>'));
+  assert.ok(html.includes('<p><span class="cite">'));
+  assert.ok(html.includes('class="code-caption"'));
+  assert.ok(!/<span class="cite">\[[^\]]*/.test(html));
+});
+
+test('reproduce box omits missing resource parts', () => {
+  const html = reproduceBox({ spec: { sandbox: { memory: '2Gi' } }, run: null, badge: true, reasons: [], id: 'a/b', commit: 'x', repo: 'r/r' });
+  assert.ok(!html.includes('undefined'));
+  assert.ok(html.includes('2Gi memory'));
+});

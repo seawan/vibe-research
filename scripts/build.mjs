@@ -10,7 +10,7 @@ import hljs from 'highlight.js';
 import matter from 'gray-matter';
 import { validatePost } from './lib/post-schema.mjs';
 import { parseDeltaSpec, figuresIn, checkFigures, computeBadge, stripDiagram } from './lib/delta-spec.mjs';
-import { aiProcessBox, specsSection, verificationBox, reproduceBox, bylineHtml, updatedHtml, resolveResultMacros, postCommit } from './lib/sections.mjs';
+import { aiProcessBox, specsSection, verificationBox, reproduceBox, bylineHtml, updatedHtml, resolveResultMacros, postCommit, esc, safeUrl } from './lib/sections.mjs';
 import { viewerKind, langOf, renderCode, renderCsv, renderNotebook } from './viewers.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -22,35 +22,9 @@ let POSTS, INCLUDE_DRAFTS, ALLOW_UNVERIFIED, COMMIT_INFO;
 let errors = [];
 let warnings = [];
 
-const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const slugify = (s) => s.replace(/\uE000\d+\uE001/g, '').toLowerCase().replace(/<[^>]+>/g, '').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+const slugify = (s) => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
 const fmtDate = (d) => new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 const isoDate = (d) => new Date(d).toISOString().slice(0, 10);
-
-// ---------- citations ----------
-// [@key] or [@a; @b] -> numbered links; numbering follows first appearance.
-// Engine-generated HTML is kept out of marked as private-use placeholders (user HTML is escaped); see loadPost.
-function processCitations(md, refs, slug, lenient, keep) {
-  const order = [];
-  const parts = md.split(/(```[\s\S]*?```|\$\$[\s\S]*?\$\$)/g); // leave code and display math alone
-  const out = parts.map((part, i) => {
-    if (i % 2 === 1) return part;
-    return part.replace(/\[(@[\w:.-]+(?:\s*;\s*@[\w:.-]+)*)\]/g, (_, group) => {
-      const keys = group.split(';').map((k) => k.trim().slice(1));
-      const links = keys.map((k) => {
-        if (!refs[k]) {
-          (lenient ? warnings : errors).push(`${slug}: cited key "${k}" is not in refs.json`);
-          return keep(`<a class="cite-missing">?${esc(k)}</a>`);
-        }
-        if (!order.includes(k)) order.push(k);
-        const n = order.indexOf(k) + 1;
-        return keep(`<a href="#ref-${esc(k)}" title="${esc(refs[k].title)}">${n}</a>`);
-      });
-      return keep(`<span class="cite">[${links.join(', ')}]</span>`);
-    });
-  });
-  return { md: out.join(''), order };
-}
 
 function formatAuthors(authors = []) {
   if (authors.length === 0) return '';
@@ -66,7 +40,7 @@ function renderBibliography(order, refs) {
     const links = [];
     if (r.arxiv) links.push(`<a href="https://arxiv.org/abs/${esc(r.arxiv)}">arXiv:${esc(r.arxiv)}</a>`);
     if (r.doi) links.push(`<a href="https://doi.org/${esc(r.doi)}">doi:${esc(r.doi)}</a>`);
-    if (r.url && !r.arxiv && !r.doi) links.push(`<a href="${esc(r.url)}">link</a>`);
+    if (r.url && safeUrl(r.url) && !r.arxiv && !r.doi) links.push(`<a href="${esc(r.url)}">link</a>`);
     const badge = r.verified
       ? `<span class="verified" title="Metadata checked against ${esc(r.verified_via)} on ${esc(r.verified_on)}">✓ verified (${esc(r.verified_via)})</span>`
       : `<span class="unverified">unverified</span>`;
@@ -77,7 +51,8 @@ function renderBibliography(order, refs) {
 }
 
 // ---------- markdown ----------
-function makeMarked(toc) {
+// ctx = { refs, order, slug, lenient } turns on [@key] citations; without it they stay plain text.
+function makeMarked(toc, ctx) {
   const marked = new Marked(
     markedHighlight({
       langPrefix: 'hljs language-',
@@ -89,10 +64,46 @@ function makeMarked(toc) {
   );
   marked.use(markedKatex({ throwOnError: false, nonStandard: true, output: 'html' }));
   marked.use({
+    extensions: [
+      // [@key] or [@a; @b] -> numbered links; numbering follows first appearance. Emitted by marked itself, never raw HTML.
+      {
+        name: 'cite', level: 'inline',
+        start: (src) => (ctx ? src.indexOf('[@') : -1),
+        tokenizer(src) {
+          const m = ctx && /^\[(@[\w:.-]+(?:\s*;\s*@[\w:.-]+)*)\]/.exec(src);
+          return m ? { type: 'cite', raw: m[0], keys: m[1].split(';').map((k) => k.trim().slice(1)) } : undefined;
+        },
+        renderer({ keys }) {
+          const links = keys.map((k) => {
+            if (!ctx.refs[k]) {
+              (ctx.lenient ? warnings : errors).push(`${ctx.slug}: cited key "${k}" is not in refs.json`);
+              return `<a class="cite-missing">?${esc(k)}</a>`;
+            }
+            if (!ctx.order.includes(k)) ctx.order.push(k);
+            return `<a href="#ref-${esc(k)}" title="${esc(ctx.refs[k].title)}">${ctx.order.indexOf(k) + 1}</a>`;
+          });
+          return `<span class="cite">[${links.join(', ')}]</span>`;
+        },
+      },
+      // caption line emitted by expandIncludes (JSON payload; the link target is sanitised like any other)
+      {
+        name: 'codecaption', level: 'block',
+        start: (src) => src.match(/^@@caption /m)?.index,
+        tokenizer(src) {
+          const m = /^@@caption ([^\n]+)(?:\n|$)/.exec(src);
+          if (!m) return undefined;
+          try { const { href, label } = JSON.parse(decodeURIComponent(m[1])); return { type: 'codecaption', raw: m[0], href: String(href), label: String(label) }; } catch { return undefined; }
+        },
+        renderer: ({ href, label }) => `<p class="code-caption">${safeUrl(href) ? `<a href="${esc(href)}">${esc(label)}</a>` : esc(label)}</p>\n`,
+      },
+    ],
     gfm: true,
     renderer: {
       // raw HTML in Markdown (block or inline) is shown as text, never rendered
       html({ text }) { return esc(text); },
+      // only http(s), mailto, relative and #fragment URLs; anything else is shown as plain text
+      link({ href, tokens }) { return safeUrl(href) ? false : this.parser.parseInline(tokens); },
+      image({ href, text }) { return safeUrl(href) ? false : esc(text); },
       heading({ tokens, depth, text }) {
         const inner = this.parser.parseInline(tokens);
         const id = slugify(text);
@@ -102,7 +113,7 @@ function makeMarked(toc) {
       // A paragraph holding only an image becomes a numbered figure; the image title is the caption.
       paragraph(token) {
         const t = token.tokens.filter((x) => !(x.type === 'text' && !x.text.trim()));
-        if (t.length !== 1 || t[0].type !== 'image') return false;
+        if (t.length !== 1 || t[0].type !== 'image' || !safeUrl(t[0].href)) return false;
         const img = t[0];
         const title = stripDiagram(img.title);
         const caption = title ? marked.parseInline(title) : '';
@@ -288,7 +299,7 @@ function collectFiles(dir, slug, sub = '') {
 }
 
 // A line "@include experiment.py#L20-L40" becomes that code snippet, with a link to the full file.
-function expandIncludes(md, dir, slug, keep) {
+function expandIncludes(md, dir, slug) {
   return md.replace(/^@include\s+(\S+?)(?:#L(\d+)(?:-L(\d+))?)?\s*$/gm, (line, file, a, b) => {
     const p = path.join(dir, file);
     if (!fs.existsSync(p)) { errors.push(`${slug}: @include target "${file}" not found`); return line; }
@@ -297,7 +308,9 @@ function expandIncludes(md, dir, slug, keep) {
     if (from < 1 || to > all.length || from > to) { errors.push(`${slug}: @include ${file}#L${a}-L${b} is outside the file (${all.length} lines)`); return line; }
     const label = a ? `${file}, lines ${from}–${to}` : file;
     const anchor = a ? `#L${from}-L${to}` : '';
-    return `${keep(`<p class="code-caption"><a href="${esc(file)}.html${anchor}">${esc(label)}</a></p>`)}\n\n\`\`\`${langOf(file)}\n${all.slice(from - 1, to).join('\n')}\n\`\`\`\n`;
+    return `@@caption ${encodeURIComponent(JSON.stringify({ href: `${file}.html${anchor}`, label }))}
+
+\`\`\`${langOf(file)}\n${all.slice(from - 1, to).join('\n')}\n\`\`\`\n`;
   });
 }
 
@@ -327,13 +340,7 @@ function loadPost(id) {
   if (fs.existsSync(path.join(dir, 'run.json'))) {
     try { run = JSON.parse(fs.readFileSync(path.join(dir, 'run.json'), 'utf8')); } catch (e) { report(`run.json: invalid JSON (${e.message})`); }
   }
-  const raw = [];
-  const keep = (h) => `\uE000${raw.push(h) - 1}\uE001`;
-  const restore = (h) => { // stashed pieces can nest (a cite span holds link placeholders), so repeat until none are left
-    for (let prev = ''; prev !== h;) prev = h, h = h.replace(/<p>\uE000(\d+)\uE001<\/p>/g, (m, n) => raw[n] ?? m).replace(/\uE000(\d+)\uE001/g, (m, n) => raw[n] ?? m);
-    return h;
-  };
-  let withIncludes = expandIncludes(content.replace(/[\uE000\uE001]/g, ''), dir, id, keep);
+  let withIncludes = expandIncludes(content, dir, id);
   const macros = resolveResultMacros(withIncludes, run?.result_summary);
   macros.errors.forEach(report);
   withIncludes = macros.markdown;
@@ -345,21 +352,19 @@ function loadPost(id) {
   const refs = Object.fromEntries(refList.map((r) => [r.key, r]));
 
   const files = collectFiles(dir, id);
-  const { md, order } = processCitations(withIncludes, refs, id, fm.draft || ALLOW_UNVERIFIED, keep);
+  const toc = [];
+  const order = [];
+  const marked = makeMarked(toc, { refs, order, slug: id, lenient: fm.draft || ALLOW_UNVERIFIED });
+  // links to shipped files open their readable HTML view; the raw file stays downloadable from there
+  const viewable = new Set(files.map((f) => f.rel));
+  const viewerHref = (href) => (viewable.has(href.replace(/^\.\//, '')) ? href.replace(/^\.\//, '') + '.html' : href);
+  const html = marked.parse(withIncludes)
+    .replace(/<table>/g, '<div class="table-wrap"><table>').replace(/<\/table>/g, '</table></div>')
+    .replace(/href="([^"#?]+)"/g, (m, href) => `href="${viewerHref(href)}"`);
   for (const k of order) {
     if (!refs[k].verified) (fm.draft || ALLOW_UNVERIFIED ? warnings : errors).push(`${id}: reference "${k}" is not verified (run: npm run check-refs -- posts/${id})`);
   }
   for (const r of refList) if (!order.includes(r.key)) warnings.push(`${id}: reference "${r.key}" is in refs.json but never cited`);
-
-  const toc = [];
-  const marked = makeMarked(toc);
-  // links to shipped files open their readable HTML view; the raw file stays downloadable from there
-  const viewable = new Set(files.map((f) => f.rel));
-  const viewerHref = (href) => (viewable.has(href.replace(/^\.\//, '')) ? href.replace(/^\.\//, '') + '.html' : href);
-  const html = restore(marked.parse(md))
-    .replace(/<table>/g, '<div class="table-wrap"><table>').replace(/<\/table>/g, '</table></div>')
-    .replace(/href="([^"#?]+)"/g, (m, href) => `href="${viewerHref(href)}"`);
-  toc.forEach((t) => { t.html = restore(t.html); });
   const nKatexErr = (html.match(/class="katex-error"/g) ?? []).length;
   if (nKatexErr) errors.push(`${id}: ${nKatexErr} math expression(s) failed to render (search for katex-error in dist/posts/${id}/index.html)`);
   const words = content.replace(/\$\$[\s\S]*?\$\$|```[\s\S]*?```/g, '').split(/\s+/).length;

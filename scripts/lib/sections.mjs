@@ -1,7 +1,15 @@
 // Generated post sections (AI & process, Specs, Author verification, Reproduce), byline, macros. Pure except postCommit.
 import { execFileSync } from 'node:child_process';
 
-const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+export const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// only http(s), mailto, relative and #fragment URLs are allowed in rendered links and images
+export const safeUrl = (href) => {
+  // browsers decode entities inside href attributes, so check the decoded form
+  const dec = String(href ?? '').replace(/&#x([\da-f]+);?/gi, (m, n) => String.fromCodePoint(Math.min(parseInt(n, 16), 0x10ffff))).replace(/&#(\d+);?/g, (m, n) => String.fromCodePoint(Math.min(+n, 0x10ffff))).replace(/&colon;/gi, ':').replace(/&(tab|newline);/gi, '');
+  const h = dec.replace(/[\u0000-\u0020\u007f-\u009f\u00ad\u200b-\u200f\u2028\u2029\ufeff]/g, '');
+  const scheme = /^([^/?#]*?):/.exec(h);
+  return !scheme || /^(https?|mailto)$/i.test(scheme[1]);
+};
 const day = (d) => (d instanceof Date ? (isNaN(d) ? '' : d.toISOString().slice(0, 10)) : String(d ?? '').slice(0, 10));
 const h2 = (id, html) => `<h2 id="${id}"><a class="anchor" href="#${id}">#</a>${html}</h2>`;
 
@@ -59,11 +67,11 @@ export function reproduceBox({ spec, run, badge, reasons = [], id, commit, repo 
   }
   const s = spec?.sandbox ?? run?.sandbox ?? {};
   const dep = spec?.deployment ?? run?.sandbox?.deployment;
-  const summary = [`${s.cpu} CPU`, `${s.memory} memory`, s.gpu > 0 ? `GPU: ${gpuText(s)}` : 'no GPU', spec?.sandbox?.max_life ? `up to ${spec.sandbox.max_life} min` : null, dep].filter(Boolean).join(' · ');
+  const summary = [s.cpu != null && `${s.cpu} CPU`, s.memory && `${s.memory} memory`, s.gpu > 0 ? `GPU: ${gpuText(s)}` : s.gpu === 0 && 'no GPU', spec?.sandbox?.max_life && `up to ${spec.sandbox.max_life} min`, dep].filter(Boolean).join(' · ');
   return `<section class="box reproduce">${h2('reproduce', 'Reproduce')}
 <p><span class="badge badge-ok">✓ Delta-reproducible</span></p>
 <pre><code>npx -y github:${esc(repo)}#${esc(commit)} ${esc(id)}</code></pre>
-<p>Pinned to the commit that last changed this post. Rerun spec: <a href="delta.yaml"><code>delta.yaml</code></a>. Resources: ${esc(summary)}.</p>
+<p>Pinned to the commit that last changed this post. Rerun spec: <a href="delta.yaml"><code>delta.yaml</code></a>. ${summary ? `Resources: ${esc(summary)}.` : ''}</p>
 <p class="ref-note">Need Delta? Register for delta-cli first.</p></section>`;
 }
 

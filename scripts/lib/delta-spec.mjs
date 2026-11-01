@@ -77,6 +77,14 @@ export function checkFigures({ figures = [], outputs = [], upload = '.' }) {
   return figures.filter((f) => !f.diagram && !have.has(f.path)).map((f) => `figure "${f.path}" is not listed in outputs and not marked {diagram}`);
 }
 
+// first non-flag token after an interpreter is the script (relative to upload); python -m / -c have none
+export function commandScript(command) {
+  const tokens = String(command ?? '').trim().split(/\s+/);
+  if (!INTERPRETERS.includes(path.posix.basename(tokens[0]))) return undefined;
+  const rest = tokens.slice(1);
+  return rest.some((t) => t === '-m' || t === '-c') ? undefined : rest.find((t) => !t.startsWith('-'));
+}
+
 export function computeBadge({ postDir, spec, run, figures = [] }) {
   const reasons = [];
   if (!spec) return { badge: false, reasons: ['delta.yaml is missing or invalid'] };
@@ -90,13 +98,8 @@ export function computeBadge({ postDir, spec, run, figures = [] }) {
   else if (run.exit_code !== 0) reasons.push(`run.json: exit_code is ${run.exit_code}, expected 0`);
   const upReal = real(up);
   if (!upReal || !fs.statSync(upReal).isDirectory()) reasons.push(`upload directory "${up}" does not exist`);
-  // first non-flag token after an interpreter is the script (relative to upload); python -m / -c have none
-  const tokens = String(spec.command ?? '').trim().split(/\s+/);
-  if (INTERPRETERS.includes(path.posix.basename(tokens[0]))) {
-    const rest = tokens.slice(1);
-    const script = rest.some((t) => t === '-m' || t === '-c') ? undefined : rest.find((t) => !t.startsWith('-'));
-    if (script && !exists(inUp(script))) reasons.push(`command script "${script}" does not exist`);
-  }
+  const script = commandScript(spec.command);
+  if (script && !exists(inUp(script))) reasons.push(`command script "${script}" does not exist`);
   for (const o of spec.outputs ?? []) if (!exists(inUp(o))) reasons.push(`output file "${o}" does not exist`);
   reasons.push(...checkFigures({ figures, outputs: spec.outputs, upload: up }));
   return { badge: reasons.length === 0, reasons };

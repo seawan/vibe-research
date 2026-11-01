@@ -35,3 +35,5 @@ test('requires chat excerpt or chat link', () => {
   const fm = validFm(); fm.chat_links = ['https://example.com/c/1'];
   assert.deepEqual(run({ fm, files: ['index.md', 'add.py'] }), []);
 });
+test('data-only post has no code file', () => has(run({ files: ['index.md', 'chat/notes.md', 'data.json', 'delta.yaml', 'run.json', 'notes.txt', 'out.csv'] }), 'code:'));
+test('rejects impossible verification date', () => { const fm = validFm(); fm.author_verification.date = '2026-02-31'; has(run({ fm }), 'author_verification.date'); });

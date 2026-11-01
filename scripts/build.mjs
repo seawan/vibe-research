@@ -9,6 +9,7 @@ import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js';
 import matter from 'gray-matter';
 import { validatePost } from './lib/post-schema.mjs';
+import { parseDeltaSpec, figuresIn, checkFigures, computeBadge, stripDiagram } from './lib/delta-spec.mjs';
 import { viewerKind, langOf, renderCode, renderCsv, renderNotebook } from './viewers.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -99,7 +100,8 @@ function makeMarked(toc) {
         const t = token.tokens.filter((x) => !(x.type === 'text' && !x.text.trim()));
         if (t.length !== 1 || t[0].type !== 'image') return false;
         const img = t[0];
-        const caption = img.title ? marked.parseInline(img.title) : '';
+        const title = stripDiagram(img.title);
+        const caption = title ? marked.parseInline(title) : '';
         return `<figure><img src="${esc(img.href)}" alt="${esc(img.text)}" loading="lazy">${caption ? `<figcaption>${caption}</figcaption>` : ''}</figure>\n`;
       },
       // > [!NOTE] / [!INTUITION] / [!TAKEAWAY] / [!WARNING] / [!DEFINITION] -> callout box
@@ -289,6 +291,20 @@ function loadPost(id) {
   for (const field of ['title', 'date']) if (!fm[field]) errors.push(`${id}: front matter is missing "${field}"`);
   // schema: errors, or warnings for drafts
   for (const m of validatePost({ fm, markdown: content, folderUser: user, files: listAll(dir) })) (fm.draft ? warnings : errors).push(`${id}: ${m}`);
+  // delta.yaml + run.json, figure provenance: errors, or warnings for drafts
+  const report = (m) => (fm.draft ? warnings : errors).push(`${id}: ${m}`);
+  let spec = null, run = null, specOk = false;
+  if (fs.existsSync(path.join(dir, 'delta.yaml'))) {
+    const parsed = parseDeltaSpec(fs.readFileSync(path.join(dir, 'delta.yaml'), 'utf8'));
+    spec = parsed.spec; specOk = parsed.errors.length === 0;
+    parsed.errors.forEach(report);
+  }
+  if (fs.existsSync(path.join(dir, 'run.json'))) {
+    try { run = JSON.parse(fs.readFileSync(path.join(dir, 'run.json'), 'utf8')); } catch (e) { report(`run.json: invalid JSON (${e.message})`); }
+  }
+  const figures = figuresIn(content);
+  checkFigures({ figures, outputs: Array.isArray(spec?.outputs) ? spec.outputs : fm.outputs ?? [] }).forEach(report);
+  const delta = { spec: specOk ? spec : null, run, ...computeBadge({ postDir: dir, spec: specOk ? spec : null, run, figures }) };
   const refsPath = path.join(dir, 'refs.json');
   const refList = fs.existsSync(refsPath) ? JSON.parse(fs.readFileSync(refsPath, 'utf8')) : [];
   const refs = Object.fromEntries(refList.map((r) => [r.key, r]));
@@ -323,7 +339,7 @@ function loadPost(id) {
     }
   }
   const shown = files.filter((f) => !f.skip);
-  return { id, user, slug, dir, fm, html, toc, order, refs, inline, viewerHref, files: shown, minutes: Math.max(1, Math.round(words / 220)) };
+  return { id, user, slug, dir, fm, delta, html, toc, order, refs, inline, viewerHref, files: shown, minutes: Math.max(1, Math.round(words / 220)) };
 }
 
 // Build every post under postsDir/<user>/<slug>/ into outDir. Never exits; returns { posts, errors, warnings }.

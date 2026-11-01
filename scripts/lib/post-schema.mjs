@@ -5,6 +5,8 @@ export const TEXT_LICENSES = ['CC-BY-4.0', 'CC-BY-SA-4.0', 'CC0-1.0'];
 export const CODE_LICENSES = ['MIT', 'Apache-2.0', 'BSD-3-Clause', 'CC0-1.0'];
 export const BOILERPLATE_CHECKS = ['verified', 'i verified the results', 'i checked the results', 'looks good', 'done', 'n/a', 'yes'];
 
+// data/text files never count as code
+const DATA_EXTS = ['.json', '.yaml', '.yml', '.txt', '.log', '.csv', '.tsv', '.md'];
 const USER_RE = /^[a-z\d](?:[a-z\d-]{0,38})$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const isStr = (s) => typeof s === 'string' && s.trim() !== '';
@@ -51,7 +53,7 @@ export function validatePost({ fm = {}, markdown = '', folderUser, files = [] })
     if (v.verified !== true) e.push('author_verification.verified: must be true');
     if (!okAuthors || !authors.includes(v.by)) e.push('author_verification.by: must be one of the authors');
     const d = dayOf(v.date);
-    if (!DATE_RE.test(d) || isNaN(new Date(d))) e.push('author_verification.date: must be a YYYY-MM-DD date');
+    if (!DATE_RE.test(d) || isNaN(new Date(d)) || new Date(d).toISOString().slice(0, 10) !== d) e.push('author_verification.date: must be a YYYY-MM-DD date');
     else if (d > new Date().toISOString().slice(0, 10)) e.push('author_verification.date: must not be in the future');
     const c = typeof v.checked === 'string' ? v.checked.trim() : '';
     if (c.length < 40) e.push('author_verification.checked: say specifically what you checked (at least 40 characters)');
@@ -74,7 +76,7 @@ export function validatePost({ fm = {}, markdown = '', folderUser, files = [] })
 
   // files
   const ext = (f) => (f.includes('.') ? f.slice(f.lastIndexOf('.')).toLowerCase() : '');
-  if (!files.some((f) => CODE_LANGS[ext(f)] && !/^(refs|run)\.json$/.test(f))) e.push('code: the post folder must contain at least one code file');
+  if (!files.some((f) => CODE_LANGS[ext(f)] && !DATA_EXTS.includes(ext(f)))) e.push('code: the post folder must contain at least one code file');
   const links = fm.chat_links;
   if (links !== undefined && !(Array.isArray(links) && links.every((u) => typeof u === 'string' && /^https:\/\/\S+$/.test(u)))) e.push('chat_links: must be a list of https URLs');
   const hasLinks = Array.isArray(links) && links.length > 0;

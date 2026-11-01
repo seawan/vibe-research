@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "execution_id": "fixture-0001",
+  "sandbox": { "image": "Python 3.11 (CPU)", "cpu": 1, "memory": "2Gi", "gpu": 0, "gpu_mem": null, "gpu_type": null, "deployment": "overseas" },
+  "started_at": "2026-11-01T09:00:00Z",
+  "finished_at": "2026-11-01T09:00:02Z",
+  "duration_s": 2,
+  "exit_code": 0,
+  "delta_cli_version": "0.0.0-fixture",
+  "packages": [],
+  "result_summary": null
+}

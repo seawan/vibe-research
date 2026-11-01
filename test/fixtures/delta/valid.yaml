@@ -1,0 +1,21 @@
+version: 1
+deployment: overseas
+sandbox:
+  image: "PyTorch CUDA13 (GPU)"
+  cpu: 4
+  memory: 16Gi
+  gpu: 1
+  gpu_mem: 24000
+  gpu_type: "RTX 4090"
+  shm_size: 4Gi
+  max_life: 120
+upload: "."
+setup: "pip install -r requirements.txt"
+command: "python experiment.py"
+timeout: 3600
+outputs:
+  - results.csv
+  - figs/error.png
+expected:
+  rel_tolerance: 0.05
+  values: { qmc_error_262k: 1.1e-4 }

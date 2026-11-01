@@ -1,0 +1,13 @@
+version: 1
+deployment: overseas
+sandbox:
+  image: "Python 3.11 (CPU)"
+  cpu: 1
+  memory: 2Gi
+  gpu: 0
+  max_life: 10
+upload: "."
+command: "python add.py"
+timeout: 60
+outputs:
+  - result.txt

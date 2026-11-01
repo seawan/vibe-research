@@ -7,7 +7,10 @@ tags: [monte carlo, quasi-monte carlo, pi, gpu, for young readers]
 code: "experiment.py"
 draft: true
 authors: [seawan]
-ai: []            # TO FILL IN BY THE AUTHOR: which AI tools and models you used, and for what
+ai:
+  - name: "Claude"
+    model: "claude-opus-5-5"
+    role: "wrote the code, ran the experiment in a Delta sandbox, made the pictures and wrote the post"
 contribution: ""  # TO FILL IN BY THE AUTHOR, in your own words: what you did and what the AI did
 license: CC-BY-4.0
 code_license: MIT

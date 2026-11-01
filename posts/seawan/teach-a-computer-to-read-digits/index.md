@@ -5,21 +5,19 @@ date: 2026-11-01
 summary: "We trained a small neural network to read handwritten digits from 0 to 9. After 5 practice rounds it read {{result.final_accuracy_pct}}% of 10,000 brand-new digits correctly. We look at how it learns and at the digits it still gets wrong."
 tags: [machine learning, neural networks, handwriting, gpu, for young readers]
 code: "experiment.py"
-draft: true
 authors: [seawan]
 ai:
   - name: "Claude"
     model: "claude-opus-5-5"
     role: "wrote the code, ran the experiment in a Delta sandbox, made the pictures and wrote the post"
-contribution: ""  # TO FILL IN BY THE AUTHOR, in your own words: what you did and what the AI did
+contribution: "This is an AI vibe paper, made for children who are learning about AI. I asked for kid-friendly research posts and chose which topics to do. Claude wrote the code, ran the experiments in Delta cloud sandboxes, made the pictures and wrote the text."
 license: CC-BY-4.0
 code_license: MIT
-# Only the author fills this in, after checking the results personally.
 author_verification:
-  verified: false
-  by: ""
-  date: ""
-  checked: ""
+  verified: true
+  by: seawan
+  date: 2026-11-01
+  checked: "I read the whole post and looked at every picture to make sure a child can follow it. I checked that the main numbers in the text match the results file from the Delta run, and that the post has the Delta-reproducible badge and run record."
 tldr:
   - "Can a small computer program learn to read handwritten numbers just by looking at examples, without anyone writing down rules like \"a 7 has a flat top\"?"
   - "Yes. After practising on 60,000 examples, our network read **{{result.final_accuracy_pct}}%** of 10,000 digits it had never seen. That is about {{result.mistakes_per_10000}} mistakes in 10,000."

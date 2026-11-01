@@ -49,9 +49,3 @@ The method / experiment design, step by step. Enough detail to reproduce: data, 
 ## What this does (and doesn't) show
 
 Limitations, threats to validity, things we did not test.
-
-## Reproduce it
-
-```bash
-# commands to re-run the experiments
-```

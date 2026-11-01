@@ -10,6 +10,7 @@ import hljs from 'highlight.js';
 import matter from 'gray-matter';
 import { validatePost } from './lib/post-schema.mjs';
 import { parseDeltaSpec, figuresIn, checkFigures, computeBadge, stripDiagram } from './lib/delta-spec.mjs';
+import { aiProcessBox, specsSection, verificationBox, reproduceBox, bylineHtml, updatedHtml, resolveResultMacros, postCommit } from './lib/sections.mjs';
 import { viewerKind, langOf, renderCode, renderCsv, renderNotebook } from './viewers.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -17,18 +18,19 @@ const site = JSON.parse(fs.readFileSync(path.join(ROOT, 'site.config.json'), 'ut
 const base = site.baseUrl.endsWith('/') ? site.baseUrl : site.baseUrl + '/';
 
 // per-build state, reset by buildSite()
-let POSTS, INCLUDE_DRAFTS, ALLOW_UNVERIFIED;
+let POSTS, INCLUDE_DRAFTS, ALLOW_UNVERIFIED, COMMIT_INFO;
 let errors = [];
 let warnings = [];
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const slugify = (s) => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+const slugify = (s) => s.replace(/\uE000\d+\uE001/g, '').toLowerCase().replace(/<[^>]+>/g, '').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
 const fmtDate = (d) => new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 const isoDate = (d) => new Date(d).toISOString().slice(0, 10);
 
 // ---------- citations ----------
 // [@key] or [@a; @b] -> numbered links; numbering follows first appearance.
-function processCitations(md, refs, slug, lenient) {
+// Engine-generated HTML is kept out of marked as private-use placeholders (user HTML is escaped); see loadPost.
+function processCitations(md, refs, slug, lenient, keep) {
   const order = [];
   const parts = md.split(/(```[\s\S]*?```|\$\$[\s\S]*?\$\$)/g); // leave code and display math alone
   const out = parts.map((part, i) => {
@@ -38,13 +40,13 @@ function processCitations(md, refs, slug, lenient) {
       const links = keys.map((k) => {
         if (!refs[k]) {
           (lenient ? warnings : errors).push(`${slug}: cited key "${k}" is not in refs.json`);
-          return `<a class="cite-missing">?${esc(k)}</a>`;
+          return keep(`<a class="cite-missing">?${esc(k)}</a>`);
         }
         if (!order.includes(k)) order.push(k);
         const n = order.indexOf(k) + 1;
-        return `<a href="#ref-${esc(k)}" title="${esc(refs[k].title)}">${n}</a>`;
+        return keep(`<a href="#ref-${esc(k)}" title="${esc(refs[k].title)}">${n}</a>`);
       });
-      return `<span class="cite">[${links.join(', ')}]</span>`;
+      return keep(`<span class="cite">[${links.join(', ')}]</span>`);
     });
   });
   return { md: out.join(''), order };
@@ -89,6 +91,8 @@ function makeMarked(toc) {
   marked.use({
     gfm: true,
     renderer: {
+      // raw HTML in Markdown (block or inline) is shown as text, never rendered
+      html({ text }) { return esc(text); },
       heading({ tokens, depth, text }) {
         const inner = this.parser.parseInline(tokens);
         const id = slugify(text);
@@ -150,18 +154,36 @@ ${body}
 </html>`;
 }
 
+const EXPERIMENT_RE = /^(what we did|experiment|method)/i;
+
 function postPage(post) {
   const fm = post.fm;
   const tldr = fm.tldr?.length
     ? `<aside class="tldr"><div class="callout-label">TL;DR</div><ul>${fm.tldr.map((x) => `<li>${post.inline(x)}</li>`).join('')}</ul></aside>`
     : '';
-  const toc = post.toc.length > 2
-    ? `<nav class="toc"><div class="toc-label">Contents</div><ol>${post.toc.map((t) => `<li><a href="#${t.id}">${t.html}</a></li>`).join('')}${post.files.length ? '<li><a href="#code-and-data">Code &amp; data</a></li>' : ''}${post.order.length ? '<li><a href="#references">References</a></li>' : ''}</ol></nav>`
-    : '';
+  const { delta } = post;
+  // Specs go right before the experiment H2 (or before the first H2 if there is none)
+  const specs = specsSection({ spec: delta.spec, run: delta.run, fm });
+  const heads = [...post.html.matchAll(/<h2 id="[^"]*">/g)].map((m) => m.index);
+  const at = post.toc.findIndex((t) => EXPERIMENT_RE.test(t.html.replace(/<[^>]+>/g, '').trim()));
+  const cut = heads.length ? heads[at >= 0 ? at : 0] : 0;
+  const body = post.html.slice(0, cut) + specs + '\n' + post.html.slice(cut);
+  const tocItems = [...post.toc];
+  tocItems.splice(at >= 0 ? at : 0, 0, { id: 'specs', html: 'Specs: system &amp; compute' });
+  const tocHtml = tocItems.map((t) => `<li><a href="#${t.id}">${t.html}</a></li>`).join('')
+    + (post.files.length ? '<li><a href="#code-and-data">Code &amp; data</a></li>' : '')
+    + '<li><a href="#author-verification">Author verification</a></li>'
+    + (post.order.length ? '<li><a href="#references">References</a></li>' : '')
+    + '<li><a href="#reproduce">Reproduce</a></li>';
+  const toc = `<nav class="toc"><div class="toc-label">Contents</div><ol>${tocHtml}</ol></nav>`;
+  const updated = updatedHtml(post.commit.date, fm.date, site.repo, post.id);
   const meta = [
+    bylineHtml(fm.authors, '../../../'),
     `<time datetime="${isoDate(fm.date)}">${fmtDate(fm.date)}</time>`,
+    updated,
     `${post.minutes} min read`,
     fm.code ? `<a href="${esc(post.viewerHref(fm.code))}">code &amp; data</a>` : '',
+    delta.badge ? '<span class="badge badge-ok" title="Rerunnable with delta-cli">✓ Delta-reproducible</span>' : '',
     fm.draft ? '<span class="draft-badge">DRAFT</span>' : '',
   ].filter(Boolean).join(' · ');
   const tags = (fm.tags ?? []).map((t) => `<span class="tag">${esc(t)}</span>`).join('');
@@ -173,12 +195,15 @@ function postPage(post) {
   <div class="tags">${tags}</div>
 </header>
 ${tldr}
+${aiProcessBox(fm, post.chatFiles)}
 ${toc}
 <div class="post-body">
-${post.html}
+${body}
 </div>
 ${renderFileList(post.files)}
+${verificationBox(fm.author_verification)}
 ${renderBibliography(post.order, post.refs)}
+${reproduceBox({ spec: delta.spec, run: delta.run, badge: delta.badge, reasons: delta.reasons, id: post.id, commit: post.commit.sha, repo: site.repo })}
 ${fm.ai_disclosure !== false ? `<p class="disclosure">This is a “vibe research” report: the experiments and the write-up were produced with help from an AI assistant and checked by the author. Numbers come from the linked code and data; references were machine-verified.</p>` : ''}
 </article>`;
 }
@@ -263,7 +288,7 @@ function collectFiles(dir, slug, sub = '') {
 }
 
 // A line "@include experiment.py#L20-L40" becomes that code snippet, with a link to the full file.
-function expandIncludes(md, dir, slug) {
+function expandIncludes(md, dir, slug, keep) {
   return md.replace(/^@include\s+(\S+?)(?:#L(\d+)(?:-L(\d+))?)?\s*$/gm, (line, file, a, b) => {
     const p = path.join(dir, file);
     if (!fs.existsSync(p)) { errors.push(`${slug}: @include target "${file}" not found`); return line; }
@@ -272,7 +297,7 @@ function expandIncludes(md, dir, slug) {
     if (from < 1 || to > all.length || from > to) { errors.push(`${slug}: @include ${file}#L${a}-L${b} is outside the file (${all.length} lines)`); return line; }
     const label = a ? `${file}, lines ${from}–${to}` : file;
     const anchor = a ? `#L${from}-L${to}` : '';
-    return `<p class="code-caption"><a href="${file}.html${anchor}">${label}</a></p>\n\n\`\`\`${langOf(file)}\n${all.slice(from - 1, to).join('\n')}\n\`\`\`\n`;
+    return `${keep(`<p class="code-caption"><a href="${esc(file)}.html${anchor}">${esc(label)}</a></p>`)}\n\n\`\`\`${langOf(file)}\n${all.slice(from - 1, to).join('\n')}\n\`\`\`\n`;
   });
 }
 
@@ -302,7 +327,16 @@ function loadPost(id) {
   if (fs.existsSync(path.join(dir, 'run.json'))) {
     try { run = JSON.parse(fs.readFileSync(path.join(dir, 'run.json'), 'utf8')); } catch (e) { report(`run.json: invalid JSON (${e.message})`); }
   }
-  const withIncludes = expandIncludes(content, dir, id);
+  const raw = [];
+  const keep = (h) => `\uE000${raw.push(h) - 1}\uE001`;
+  const restore = (h) => { // stashed pieces can nest (a cite span holds link placeholders), so repeat until none are left
+    for (let prev = ''; prev !== h;) prev = h, h = h.replace(/<p>\uE000(\d+)\uE001<\/p>/g, (m, n) => raw[n] ?? m).replace(/\uE000(\d+)\uE001/g, (m, n) => raw[n] ?? m);
+    return h;
+  };
+  let withIncludes = expandIncludes(content.replace(/[\uE000\uE001]/g, ''), dir, id, keep);
+  const macros = resolveResultMacros(withIncludes, run?.result_summary);
+  macros.errors.forEach(report);
+  withIncludes = macros.markdown;
   const figures = figuresIn(withIncludes); // include-expanded, as rendered
   checkFigures({ figures, outputs: Array.isArray(spec?.outputs) ? spec.outputs : fm.outputs ?? [], upload: typeof spec?.upload === 'string' ? spec.upload : '.' }).forEach(report);
   const delta = { spec: specOk ? spec : null, run, ...computeBadge({ postDir: dir, spec: specOk ? spec : null, run, figures }) };
@@ -311,7 +345,7 @@ function loadPost(id) {
   const refs = Object.fromEntries(refList.map((r) => [r.key, r]));
 
   const files = collectFiles(dir, id);
-  const { md, order } = processCitations(withIncludes, refs, id, fm.draft || ALLOW_UNVERIFIED);
+  const { md, order } = processCitations(withIncludes, refs, id, fm.draft || ALLOW_UNVERIFIED, keep);
   for (const k of order) {
     if (!refs[k].verified) (fm.draft || ALLOW_UNVERIFIED ? warnings : errors).push(`${id}: reference "${k}" is not verified (run: npm run check-refs -- posts/${id})`);
   }
@@ -322,9 +356,10 @@ function loadPost(id) {
   // links to shipped files open their readable HTML view; the raw file stays downloadable from there
   const viewable = new Set(files.map((f) => f.rel));
   const viewerHref = (href) => (viewable.has(href.replace(/^\.\//, '')) ? href.replace(/^\.\//, '') + '.html' : href);
-  const html = marked.parse(md)
+  const html = restore(marked.parse(md))
     .replace(/<table>/g, '<div class="table-wrap"><table>').replace(/<\/table>/g, '</table></div>')
     .replace(/href="([^"#?]+)"/g, (m, href) => `href="${viewerHref(href)}"`);
+  toc.forEach((t) => { t.html = restore(t.html); });
   const nKatexErr = (html.match(/class="katex-error"/g) ?? []).length;
   if (nKatexErr) errors.push(`${id}: ${nKatexErr} math expression(s) failed to render (search for katex-error in dist/posts/${id}/index.html)`);
   const words = content.replace(/\$\$[\s\S]*?\$\$|```[\s\S]*?```/g, '').split(/\s+/).length;
@@ -339,12 +374,13 @@ function loadPost(id) {
     }
   }
   const shown = files.filter((f) => !f.skip);
-  return { id, user, slug, dir, fm, delta, html, toc, order, refs, inline, viewerHref, files: shown, minutes: Math.max(1, Math.round(words / 220)) };
+  const chatFiles = listAll(dir).filter((f) => /^chat\/[^/]+\.md$/i.test(f)).sort();
+  return { id, user, slug, dir, fm, delta, commit: COMMIT_INFO(dir), chatFiles, html, toc, order, refs, inline, viewerHref, files: shown, minutes: Math.max(1, Math.round(words / 220)) };
 }
 
 // Build every post under postsDir/<user>/<slug>/ into outDir. Never exits; returns { posts, errors, warnings }.
-export function buildSite({ postsDir = path.join(ROOT, 'posts'), outDir = path.join(ROOT, 'dist'), drafts = false, allowUnverified = false } = {}) {
-  POSTS = postsDir; INCLUDE_DRAFTS = drafts; ALLOW_UNVERIFIED = allowUnverified;
+export function buildSite({ postsDir = path.join(ROOT, 'posts'), outDir = path.join(ROOT, 'dist'), drafts = false, allowUnverified = false, commitInfo = postCommit } = {}) {
+  POSTS = postsDir; INCLUDE_DRAFTS = drafts; ALLOW_UNVERIFIED = allowUnverified; COMMIT_INFO = commitInfo;
   errors = []; warnings = [];
   const DIST = outDir;
   fs.rmSync(DIST, { recursive: true, force: true });

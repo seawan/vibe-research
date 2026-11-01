@@ -35,7 +35,7 @@ function twoOutputPost() {
 }
 
 // Fake delta-cli: records argv, returns canned envelopes, "pulls" by writing files.
-function fakeCli({ exitCode = 0, throwOn = {}, pulled = {}, summary = null, runBg, create, failPull } = {}) {
+function fakeCli({ exitCode = 0, throwOn = {}, pulled = {}, summary = null, runBg, create, failPull, logs, read } = {}) {
   const calls = [];
   const cli = async (args) => {
     calls.push(args);
@@ -60,8 +60,11 @@ function fakeCli({ exitCode = 0, throwOn = {}, pulled = {}, summary = null, runB
         return { json: { ok: true, data: {} } };
       }
       case 'kill': return { json: { ok: true, data: {} } };
-      default: throw new Error(`unexpected ${args.join(' ')}`);
+      case 'logs': if (logs) return logs(args); break;
+      case 'read': if (read) return read(args); break;
+      default: break;
     }
+    throw new Error(`unexpected ${args.join(' ')}`);
   };
   cli.calls = calls;
   cli.subs = () => calls.map(sub);
@@ -173,6 +176,36 @@ test('record writes run.json with execution id, resources and packages', async (
   assert.match(logs.join('\n'), /changed.*result\.txt|result\.txt.*changed/);
 });
 
+test('record polls sandbox logs when the live stream ends before the command', async () => {
+  const postDir = copyHello();
+  const snapshots = [
+    { ok: true, data: { execution_id: 'ex-7', running: true, finished: false } },
+    { ok: true, data: { execution_id: 'ex-7', running: false, finished: true, exit_code: 0, log_file: '/workspace/u1/logs/ex-7.json' } },
+  ];
+  const cli = fakeCli({
+    runBg: () => ({ json: { type: 'incomplete', execution_id: 'ex-7' } }),
+    logs: (args) => { assert.equal(flag(args, '--execution-id'), 'ex-7'); return { json: snapshots.shift() } },
+    read: (args) => {
+      assert.equal(flag(args, '--path'), '/workspace/u1/logs/ex-7.json');
+      return { json: { ok: true, data: { content: JSON.stringify({ exit_code: 0, stdout: 'step 1\nstep 2\n{"sum": 3}\n' }) } } };
+    },
+    pulled: { 'result.txt': '4\n' },
+  });
+  const res = await rerun({ postDir, mode: 'record', cli, signals: new EventEmitter(), sleep: async () => {}, ...quiet });
+  assert.equal(res.ok, true);
+  assert.deepEqual(cli.subs().filter((x) => ['logs', 'read'].includes(x)), ['logs', 'logs', 'read']);
+  const run = JSON.parse(fs.readFileSync(path.join(postDir, 'run.json'), 'utf8'));
+  assert.equal(run.execution_id, 'ex-7');
+  assert.equal(run.exit_code, 0);
+  assert.deepEqual(run.result_summary, { sum: 3 });
+  assert.equal(cli.subs().at(-1), 'kill');
+});
+
+test('parseOutput returns the execution id when the stream ends without a complete frame', () => {
+  const sse = 'data: {"type":"init","execution_id":"ex-9"}\n\ndata: {"type":"stdout","data":"step 1"}\n\n';
+  assert.deepEqual(parseOutput(sse, 0).json, { type: 'incomplete', execution_id: 'ex-9' });
+});
+
 test('record does not write run.json when the run fails', async () => {
   const postDir = copyHello();
   const before = fs.readFileSync(path.join(postDir, 'run.json'), 'utf8');
@@ -238,10 +271,17 @@ test('resolvePostDir maps <user>/<slug> into the package posts folder', () => {
   assert.equal(resolvePostDir('./alice/hello', { cwd: '/x' }), '/x/alice/hello');
 });
 
+test('parseOutput rebuilds stdout lines that delta-cli joined without newlines', () => {
+  // real delta-cli: one stdout frame per line, and complete.stdout with the newlines dropped
+  const sse = 'data: {"type":"stdout","data":"numpy==2.2.6"}\n\ndata: {"type":"stdout","data":"torch==2.8.0"}\n\n'
+    + 'data: {"type":"complete","exit_code":0,"stdout":"numpy==2.2.6torch==2.8.0"}\n\n';
+  assert.equal(parseOutput(sse, 0).json.stdout, 'numpy==2.2.6\ntorch==2.8.0\n');
+});
+
 test('parseOutput reads envelopes, SSE complete frames and typed errors', () => {
   assert.deepEqual(parseOutput('{"ok":true,"data":{"sandbox_id":"s"}}\n', 0).json, { ok: true, data: { sandbox_id: 's' } });
   const sse = 'data: {"type":"init","execution_id":"e"}\n\ndata: {"type":"stdout","data":"hi"}\n\ndata: {"type":"complete","exit_code":0,"execution_id":"e","result_summary":{"a":1}}\n\n';
-  assert.deepEqual(parseOutput(sse, 0).json, { type: 'complete', exit_code: 0, execution_id: 'e', result_summary: { a: 1 } });
+  assert.deepEqual(parseOutput(sse, 0).json, { type: 'complete', exit_code: 0, execution_id: 'e', result_summary: { a: 1 }, stdout: 'hi\n' });
   assert.equal(parseOutput('delta-cli version v1.1.17\n', 0).json, null);
   const failed = sse.replace('"exit_code":0', '"exit_code":2') + '{"ok":false,"error":{"type":"command_failed","message":"exit 2"}}\n';
   assert.throws(() => parseOutput(failed, 8), (e) => e instanceof DeltaError && e.type === 'command_failed' && e.frame.exit_code === 2);

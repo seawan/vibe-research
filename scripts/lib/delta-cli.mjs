@@ -33,6 +33,8 @@ const tail = (s, n = 400) => (s.length > n ? '…' + s.slice(-n) : s).trim();
 
 // Parse one finished delta-cli invocation. Returns { json, stdout }; json is the `complete` frame for
 // SSE output, the envelope otherwise, or null for plain text (e.g. --version). Throws DeltaError.
+const frameText = (f) => [f?.data, f?.content, f?.text, f?.line].find((v) => typeof v === 'string');
+
 export function parseOutput(stdout, code, stderr = '') {
   const frames = [];
   const rest = [];
@@ -54,7 +56,15 @@ export function parseOutput(stdout, code, stderr = '') {
     const errFrame = frames.findLast((f) => f?.type === 'error');
     if (errFrame) throw new DeltaError('stream_error', errFrame.message ?? errFrame.error ?? 'stream error');
   }
-  if (complete) return { json: complete, stdout };
+  if (complete) {
+    // delta-cli joins streamed stdout lines without newlines; rebuild it from the per-line frames
+    const lines = frames.filter((f) => f?.type === 'stdout').map(frameText).filter((t) => t !== undefined);
+    if (lines.length) complete.stdout = lines.map((t) => (t.endsWith('\n') ? t : `${t}\n`)).join('');
+    return { json: complete, stdout };
+  }
+  // stream ended without a complete frame: hand back the execution id so the caller can poll for the result
+  const init = frames.find((f) => f?.type === 'init' && f.execution_id);
+  if (init && frames.length) return { json: { type: 'incomplete', execution_id: init.execution_id }, stdout };
   const ok = envelopes.findLast((e) => e?.ok === true);
   if (ok) return { json: ok, stdout };
   if (code !== 0) throw new DeltaError('internal', `delta-cli exited with code ${code}: ${tail(stderr || stdout) || '(no output)'}`);
@@ -94,7 +104,7 @@ export function deltaCli(args, { echo = null, bin = 'delta-cli', spawnImpl = spa
         if (!m) continue;
         try {
           const f = JSON.parse(m[1]);
-          const text = [f.data, f.content, f.text, f.line].find((v) => typeof v === 'string');
+          const text = frameText(f);
           if ((f.type === 'stdout' || f.type === 'stderr') && text) echo(text);
         } catch { /* ignore */ }
       }

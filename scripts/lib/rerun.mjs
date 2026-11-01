@@ -128,6 +128,7 @@ function resources(d = {}, spec) {
 export async function rerun({
   postDir, mode = 'rerun', outDir, cli = deltaCli, now = () => new Date(),
   signals = process, exit = (code) => process.exit(code), log = console.log, warn = console.error, record = false,
+  sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
 } = {}) {
   if (!['rerun', 'record', 'dry-run'].includes(mode)) throw new UsageError(`unknown mode "${mode}"`);
   if (!postDir || !isDir(postDir)) throw new UsageError(`post folder not found: ${postDir}`);
@@ -154,13 +155,23 @@ export async function rerun({
 
   const staging = mode === 'record' ? fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-record-')) : null;
   try {
-    return await runOnDelta({ spec, postDir, dest, staging, cli, now, signals, exit, log, warn });
+    return await runOnDelta({ spec, postDir, dest, staging, cli, now, signals, exit, log, warn, sleep });
   } finally {
     if (staging) fs.rmSync(staging, { recursive: true, force: true });
   }
 }
 
-async function runOnDelta({ spec, postDir, dest, staging, cli, now, signals, exit, log, warn }) {
+// Last line of stdout that is a JSON object (the run's result summary), or null.
+export function lastJsonObject(stdout) {
+  for (const line of String(stdout ?? '').trim().split('\n').reverse()) {
+    const t = line.trim();
+    if (!t.startsWith('{') || !t.endsWith('}')) continue;
+    try { const v = JSON.parse(t); if (v && typeof v === 'object' && !Array.isArray(v)) return v; } catch { /* not JSON */ }
+  }
+  return null;
+}
+
+async function runOnDelta({ spec, postDir, dest, staging, cli, now, signals, exit, log, warn, sleep }) {
   // after a signal the terminal may be gone (SIGHUP): a failing write (EIO/EPIPE) must not stop the kill
   let shuttingDown = false;
   const guard = (f) => (m) => { if (!shuttingDown) return f(m); try { f(m); } catch { /* terminal gone */ } };
@@ -194,6 +205,31 @@ async function runOnDelta({ spec, postDir, dest, staging, cli, now, signals, exi
     })();
     return killP;
   };
+  // The live log stream (run-bg --wait) can end before the command does, without a complete frame.
+  // Then ask Delta for the execution's status until it finishes, and read its full log file.
+  const waitForFinish = async (eid) => {
+    warn(`the live log stream ended before the command finished${eid ? ` (execution ${eid})` : ''}; checking its status every 15 s instead…`);
+    const deadline = Date.now() + (spec.timeout + 300) * 1000;
+    for (;;) {
+      const data = await step(['sandbox', 'logs', id, ...(eid ? ['--execution-id', eid] : [])]);
+      const snaps = (Array.isArray(data) ? data : [data]).filter((x) => x && typeof x === 'object');
+      const snap = eid ? snaps.find((x) => !x.execution_id || x.execution_id === eid) : snaps.at(-1);
+      if (snap?.finished) {
+        let stdout = snap.stdout_tail ?? '', exitCode = snap.exit_code;
+        if (snap.log_file) {
+          try {
+            const r = await call(['sandbox', 'read', id, '--path', snap.log_file]);
+            const raw = JSON.parse(r.json?.data?.content ?? '{}');
+            stdout = raw.stdout ?? stdout;
+            exitCode = raw.exit_code ?? exitCode;
+          } catch (e) { if (e instanceof Interrupted) throw e; warn(`warning: could not read the run's log file (${e.message}); using the last part of its output`); }
+        }
+        return { type: 'complete', exit_code: exitCode, execution_id: snap.execution_id ?? eid ?? null, stdout, result_summary: lastJsonObject(stdout), log_file: snap.log_file ?? null };
+      }
+      if (Date.now() > deadline) throw new DeltaError('timeout', 'command did not finish within its timeout (checked with sandbox logs)');
+      await Promise.race([sleep(15_000), interruptP]);
+    }
+  };
   const onSignal = (sig) => {
     if (!shuttingDown && signals === process) for (const st of [process.stdout, process.stderr]) st.on('error', () => {});
     shuttingDown = true;
@@ -226,6 +262,7 @@ async function runOnDelta({ spec, postDir, dest, staging, cli, now, signals, exi
     if (!failure) {
       started = now();
       frame = await step(plan.command, { echo });
+      if (frame.exit_code === undefined) frame = await waitForFinish(frame.execution_id);
       finished = now();
       if (frame.exit_code !== 0) failure = `command exited with code ${frame.exit_code}`;
     }

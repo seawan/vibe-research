@@ -57,8 +57,22 @@ test('pr-comment: workflow_run on PR checks, minimal permissions, never runs PR 
   const iArtifact = r.indexOf('$REPORT/checklist.md');
   assert.ok(iTrusted > 0 && r.indexOf('$RUN_URL') < iNote && r.indexOf('$CONCLUSION') < iNote && iTrusted < iNote && iNote < iArtifact);
   assert.ok(r.indexOf("echo '---'") < iNote);
-  assert.match(r, /longest \+ 1/, 'fence longer than any backtick run in the artifact');
+  // untrusted checklist: backticks replaced, fixed ``` fence, byte caps on both lists
+  assert.ok(r.includes(`tr '\`' "'"`), 'backticks in the checklist replaced');
+  assert.ok(r.includes("echo '```markdown'") && r.includes("echo '```'"), 'fixed fence');
+  assert.doesNotMatch(r, /longest/);
+  assert.match(r, /head -c 40000 "\$REPORT\/checklist\.md"/);
+  assert.match(r, /head -c 8000/, 'outside-files list capped by bytes');
   assert.match(r, /3000/, 'API file-list cap handled');
+  // trusted header names the commit checked, before the untrusted part
+  const iSha = r.indexOf('Checked commit');
+  assert.ok(iSha > 0 && iSha < iNote && /HEAD_SHA:0:7|short_sha/.test(r));
+  // full body failure falls back to a short trusted-only body instead of leaving the old comment
+  assert.match(r, /too large\/failed/);
+  const iFallback = r.indexOf('too large/failed');
+  assert.ok(r.indexOf('$RUN_URL', iFallback - 2000) >= 0);
+  assert.ok(r.includes('--input "$RUNNER_TEMP/payload.json"') && r.includes('--body-file "$1"'), 'post() uses --input / --body-file');
+  assert.ok(r.indexOf('if post "$body"') < r.indexOf('post "$short"'), 'fallback posts the short body after the full one fails');
 });
 
 test('pr-check: report artifact survives early failures', () => {
@@ -83,4 +97,9 @@ test('deploy: push to main + dispatch, full history, tests before build', () => 
   const iBuild = st.findIndex((s) => s.run === 'npm run build');
   assert.ok(iTest >= 0 && iBuild > iTest);
   assert.ok(wf.jobs.deploy);
+  // least privilege: only the deploy job can write Pages / mint an OIDC token
+  assert.equal(wf.permissions?.pages, undefined);
+  assert.equal(wf.permissions?.['id-token'], undefined);
+  assert.deepEqual(wf.jobs.build.permissions, { contents: 'read' });
+  assert.deepEqual(wf.jobs.deploy.permissions, { pages: 'write', 'id-token': 'write' });
 });

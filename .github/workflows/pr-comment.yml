@@ -43,19 +43,23 @@ jobs:
           if [ "$pr_head" != "$HEAD_SHA" ]; then echo "PR #$pr head is $pr_head, run tested $HEAD_SHA: skipping (stale run or mismatched artifact)"; exit 0; fi
 
           # trusted part first: from the event and the GitHub API, never from the artifact
-          body="$RUNNER_TEMP/comment.md"
-          {
+          short_sha="${HEAD_SHA:0:7}"
+          header() {
             echo "$marker"
             echo "## Vibe Research PR checks: $CONCLUSION"
             echo
-            echo "Run: $RUN_URL"
+            echo "Checked commit $short_sha. Run: $RUN_URL"
+          }
+          body="$RUNNER_TEMP/comment.md"
+          {
+            header
             echo
             echo "### Files outside \`posts/<user>/<slug>/\` (from the GitHub API)"
             echo
             if [ "$n_files" -ge 3000 ]; then
               echo "**Too many files ($n_files): the API lists at most 3000, inspect manually.**"
             else
-              outside=$(gh api --paginate "repos/$GH_REPO/pulls/$pr/files" --jq '.[] | .filename, (.previous_filename // empty)' | grep -Ev '^posts/[^/]+/[^/]+/.' | head -n 100 || true)
+              outside=$(gh api --paginate "repos/$GH_REPO/pulls/$pr/files" --jq '.[] | .filename, (.previous_filename // empty)' | grep -Ev '^posts/[^/]+/[^/]+/.' | head -n 100 | head -c 8000 || true)
               if [ -z "$outside" ]; then echo "None."; else echo '~~~~~~~~text'; printf '%s\n' "$outside" | tr -d '~'; echo '~~~~~~~~'; fi
             fi
             echo
@@ -63,22 +67,30 @@ jobs:
             echo
             echo "_Content below was produced by the PR's own CI run and is not trusted._"
             echo
-            # untrusted checklist, shown verbatim in a fence longer than any backtick run it contains
-            head -c 50000 "$REPORT/checklist.md" > "$RUNNER_TEMP/checklist.txt"
-            longest=$( (grep -o '`\+' "$RUNNER_TEMP/checklist.txt" || true) | awk '{ if (length($0) > m) m = length($0) } END { print m + 0 }')
-            fence=$(printf '%*s' $(( longest < 3 ? 3 : longest + 1 )) '' | tr ' ' '`')
-            echo "${fence}markdown"
+            # untrusted checklist, capped and shown verbatim with its backticks replaced, so a fixed fence always holds
+            head -c 40000 "$REPORT/checklist.md" | tr '`' "'" > "$RUNNER_TEMP/checklist.txt"
+            echo '```markdown'
             cat "$RUNNER_TEMP/checklist.txt"
             echo
-            echo "$fence"
+            echo '```'
           } > "$body"
 
           id=$(gh api --paginate "repos/$GH_REPO/issues/$pr/comments" \
             --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n 1)
-          if [ -n "$id" ]; then
-            jq -Rs '{body: .}' "$body" > "$RUNNER_TEMP/payload.json"
-            gh api -X PATCH "repos/$GH_REPO/issues/comments/$id" --input "$RUNNER_TEMP/payload.json" > /dev/null
-            echo "updated comment $id on PR #$pr"
+          post() {
+            if [ -n "$id" ]; then
+              jq -Rs '{body: .}' "$1" > "$RUNNER_TEMP/payload.json" &&
+                gh api -X PATCH "repos/$GH_REPO/issues/comments/$id" --input "$RUNNER_TEMP/payload.json" > /dev/null
+            else
+              gh pr comment "$pr" --body-file "$1"
+            fi
+          }
+          if post "$body"; then
+            echo "posted checklist on PR #$pr (comment ${id:-new})"
           else
-            gh pr comment "$pr" --body-file "$body"
+            # never leave a stale comment: replace it with the trusted part only
+            short="$RUNNER_TEMP/comment-short.md"
+            { header; echo; echo "**Full report too large/failed: see the run at $RUN_URL**"; } > "$short"
+            post "$short"
+            echo "::warning::full checklist could not be posted; posted the short trusted-only comment"
           fi

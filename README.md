@@ -6,7 +6,7 @@ Anyone can contribute a post by pull request: see [CONTRIBUTING.md](CONTRIBUTING
 
 ## Daily use
 
-The easiest path is the Claude Code skill: from any research folder, say **"/publish-research"** (or "write this up for my blog"). It gathers results, writes the post, verifies references, builds and previews, and asks before publishing.
+The easiest path is the Claude Code skill: from any research folder, say **"/publish-vibe-research"** (or "write this up for Vibe Research"). It gathers results, writes the post, verifies references, builds and previews, and asks before creating a Delta sandbox or opening the pull request.
 
 By hand:
 
@@ -44,4 +44,4 @@ npm run rerun -- posts/<user>/<slug> --record   # run on Delta, pull outputs, wr
 
 ## Skill
 
-The skill source is `skills/publish-research/SKILL.md`, symlinked into `~/.claude/skills/publish-research` so it works from any folder.
+The skill source is `skills/publish-vibe-research/SKILL.md`, symlinked into `~/.claude/skills/publish-vibe-research` so it works from any folder.

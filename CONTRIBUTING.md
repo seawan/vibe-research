@@ -50,7 +50,7 @@ Every post reads like a short paper, in this order:
 
 You write sections 3, 5 and 6. Do not write `## Specs`, `## Author verification`, `## References` or `## Reproduce` yourself: the build generates them and rejects hand-written ones. Raw HTML in Markdown is shown as text, never rendered.
 
-The easiest way to get all of this right is the `/publish-research` skill in `skills/publish-research/`.
+The easiest way to get all of this right is the `/publish-vibe-research` skill in `skills/publish-vibe-research/`.
 
 ## Licenses
 

@@ -1,15 +1,18 @@
 ---
-title: "A billion darts to find π: why neat beats random"
-subtitle: "If you guess π by throwing darts, does it help to throw them neatly instead of randomly? We threw a billion of them on a GPU to find out."
+title: "Can tidy dots help you find a circle’s secret number?"
+subtitle: "Try a paper game, then meet a computer that played it about a billion times."
 date: 2026-11-01
-summary: "We guessed π by throwing up to a billion pretend darts at a square on a GPU. Darts placed neatly were about 148 times more accurate than random ones, but they improved more slowly than the textbook promise, and the circle's curved edge is the reason."
-tags: [monte carlo, quasi-monte carlo, pi, gpu, for young readers]
+summary: "We used pretend darts to guess pi, a number that belongs to every circle. Carefully spread darts gave closer guesses than random darts in our test. But one shape and one experiment cannot tell us what always works."
+tags: [circles, pi, computer experiments, for young readers]
 code: "experiment.py"
 authors: [seawan]
 ai:
   - name: "Claude"
     model: "claude-opus-5-5"
     role: "wrote the code, ran the experiment in a Delta sandbox, made the pictures and wrote the post"
+  - name: "ChatGPT (Codex CLI)"
+    model: "gpt-6.1-sol"
+    role: "rewrote the post for young readers"
 contribution: "This is an AI vibe paper, made for children who are learning about AI. I asked for kid-friendly research posts and chose which topics to do. Claude wrote the code, ran the experiments in Delta cloud sandboxes, made the pictures and wrote the text."
 license: CC-BY-4.0
 code_license: MIT
@@ -19,116 +22,153 @@ author_verification:
   date: 2026-11-01
   checked: "I read the whole post and looked at every picture to make sure a child can follow it. I checked that the main numbers in the text match the results file from the Delta run, and that the post has the Delta-reproducible badge and run record."
 tldr:
-  - "We guessed π by throwing pretend darts at a square and counting how many land inside a quarter circle. We tried **random** darts and **neatly spread** darts, up to **a billion** of each, on a GPU."
-  - "Neat darts won by a mile: with a billion darts they were **about {{result.better_by_1b}} times more accurate** (off by {{result.halton_error_1b}} instead of {{result.random_error_1b}})."
-  - "But they got better more slowly than the textbook promise. The circle's **curved edge** is the reason. We only tested this one shape, in 2D."
+  - "You can guess pi by counting dots inside a circle slice."
+  - "Carefully spread dots gave closer guesses in our test."
+  - "We tested one flat shape. Other puzzles may behave differently."
 ---
 
 ## The question
 
-π (say "pie") is the number you get when you divide the distance around any circle by the distance across it. It starts 3.14159… and never ends. Here is a fun way to find the first few digits with nothing but darts.
+Every circle shares a special number called **pi**, written π. Say it like “pie”. Divide the distance around a circle by the distance straight across its middle, and you get pi.
 
-Draw a square. Inside it, draw a quarter of a circle, like a slice of pizza that fills the square's corner. Now throw lots of darts at the square, without aiming. Count how many land on the pizza slice.
+Its digits go on forever. But you can guess its size with a drawing and some dots.
+
+Draw a square. In one corner, draw a quarter circle: one of four equal slices of a circle. Make its straight sides reach along two sides of the square.
+
+Now imagine dropping tiny paper dots onto your drawing.
 
 ![A square with a quarter circle inside. The square has area 1 and the quarter circle has area π divided by 4.](square-and-circle.svg "The pizza-slice trick. The slice covers π ÷ 4 of the square, so about π ÷ 4 of the darts land on it. Multiply the fraction by 4 and you have a guess for π. {diagram}")
 
-Why does this work? The slice takes up π ÷ 4 of the square, which is about 78.5%. So if your darts land all over the square fairly, about 78.5% of them land on the slice. Multiply the fraction you counted by 4, and out comes a guess for π.
+Most dots should land inside the slice. Some should land outside.
 
-This idea of "guess a number by trying lots of random things and counting" has a name: the **Monte Carlo method**, named after a famous casino. Scientists wrote it up in 1949 [@metropolis1949]. Today it helps forecast the weather, design aeroplanes, price things in banks and draw the lighting in animated films.
+Here is the trick. Count the dots inside the slice. Divide that count by the total number of dots. Then multiply your answer by four. You have a guess for pi!
 
-There is one problem. Random darts are a bit messy. Some bunch up together and leave empty gaps elsewhere. So we asked:
+This works because the share of dots inside tells you roughly how much of the square the slice covers. Every part of the square must have a fair chance of catching a dot.
 
-**What if we place the darts neatly and evenly, instead of randomly? How much better is the guess, even with a billion darts?**
+Scientists call this kind of chance-based guessing a **Monte Carlo method** [@metropolis1949].
 
-## Two ways to throw darts
+But chance can be messy. Dots may bunch up and leave gaps.
 
-### Random darts
+**Could carefully spread dots give you a closer guess?**
 
-A random dart can land anywhere, like a real throw with your eyes closed. The more darts you throw, the better your guess, but it improves slowly.
+## Meet the two teams
 
-> [!INTUITION]
-> With random darts, to make your guess **10 times** more accurate you need **100 times** more darts. Mathematicians call this the "square root rule", because 10 is the square root of 100.
+Our dots are pretend darts. No sharp points needed!
 
-### Neat darts
+**Team Random** puts each dart somewhere chosen by chance. It does not check where earlier darts landed.
 
-Instead of throwing randomly, we can follow a recipe that puts each new dart into the biggest empty gap left so far. This is called a **Halton sequence**, invented by John Halton in 1960 [@halton1960]. Using neat darts instead of random ones is called **quasi-Monte Carlo** ("quasi" means "almost").
+**Team Halton** follows a recipe that spreads darts across the square. A **Halton sequence** is this ordered list of dart positions. It is named after John Halton [@halton1960].
 
-The recipe is a neat trick with number bases. To find dart number 6, write 6 in base 2 (the way computers count), flip the digits around the decimal point, and you get how far right the dart goes. Do the same in base 3 to get how far up.
+It does not hunt for the biggest gap. Instead, it rearranges the digits of each dart’s number to choose a spot.
+
+The next picture shows the number trick. You can skip the details and still follow our experiment.
 
 ![Dart number 6: 6 in base 2 is 110, flipped it is 0.011, which is 0.375. 6 in base 3 is 20, flipped it is 0.02, which is 0.222.](flip-the-digits.svg "How the recipe places dart number 6. Every dart number gives a different spot, and together they fill the square evenly. {diagram}")
 
-Here is how the two kinds of darts look side by side, with 256 darts each. Filled dots landed on the slice, and hollow dots missed.
+Look at the teams below. Can you spot clumps and empty patches?
 
-![Two squares, each with 256 dots. On the left the dots are random and clumpy. On the right they are spread evenly.](darts.png "256 random darts (left) and 256 neat darts (right), drawn by our program. The random ones clump and leave holes, while the neat ones cover the square evenly. With only 256 darts both happen to give the same guess; the difference shows up when you repeat this many times.")
+Filled dots landed inside the slice. Hollow dots landed outside.
 
-> [!NOTE]
-> **For grown-ups.** The guess is $\hat\pi_N = \frac{4}{N}\sum_{i=1}^{N}\mathbf{1}[x_i^2+y_i^2\le 1]$. In words: count the darts inside, divide by all $N$ darts, multiply by 4. For random darts the typical error is about $1.64/\sqrt{N}$. Theory for neat (low-discrepancy) points [@niederreiter1992] promises close to $1/N$, but only for smooth functions. "Inside or outside" jumps suddenly at the edge, so it is not smooth.
+![Two squares, each with 256 dots. On the left the dots are random and clumpy. On the right they are spread evenly.](darts.png "Team Random (left) and Team Halton (right), 256 darts each, drawn by our program. The random darts clump and leave holes. The Halton darts cover the square evenly.")
+
+Surprise: these two pictures give the same guess! A tidy-looking picture alone cannot tell us which team usually does better.
+
+We need more games.
 
 ## What we did
 
-We wrote a Python program, [`experiment.py`](experiment.py), that throws pretend darts on a computer. Checking whether a dart is inside the slice takes one line:
+An AI called Claude wrote a program in Python, a language for giving computers instructions. The program, [`experiment.py`](experiment.py), placed darts and checked which landed inside the slice.
+
+Here is the part that checks each dart. You do not need to read computer code to follow the story.
 
 @include experiment.py#L56-L58
 
-In words: a dart at position $(x, y)$ is inside if $x^2 + y^2$ is at most 1 (that is Pythagoras' rule for distance from the corner).
+We started with 64 darts. Then we doubled the number again and again, ending with just over a billion. A billion is a thousand million!
 
-Here is the whole experiment:
+At each size, each team played 50 games.
 
-1. **How many darts.** We started with 64 darts and kept doubling: 128, 256, … all the way to {{result.max_darts}} darts, which is just over a billion.
-2. **Random darts.** For each number, we threw random darts 50 separate times and measured how far each guess was from the real π.
-3. **Neat darts.** Neat darts always land in the same places, so repeating them would give the same answer 50 times. To make a fair test we slid the whole neat pattern by a random amount each time, wrapping around the edges like in a video game. The darts stay evenly spread. This trick is from Cranley and Patterson [@cranley1976].
-4. **Scoring.** For each number of darts, we averaged how far off the 50 guesses were. Smaller is better.
+For Team Random, the computer chose fresh positions each time.
 
-A billion darts, 50 times over, for two kinds of darts, is about a **hundred billion** darts in total. That is far too many for a laptop, so we ran it on a graphics card (GPU) in a Delta cloud sandbox (see the Reproduce box at the end). A GPU can check millions of darts at the same moment. Our program handles the darts in batches of about 16 million, so they never all need to fit in memory at once. The whole run took {{result.seconds}} seconds on an {{result.device}}. All the numbers are in [`results.csv`](results.csv).
+Team Halton needed a different trick. Its recipe always gives the same pattern. So we slid the pattern by a randomly chosen amount before each game. Darts that slid off one edge came back through the opposite edge, like characters in some video games [@cranley1976].
+
+For each guess, we measured the **error**: how far it was from pi. Then we found each team’s average error across its games. A smaller error wins.
+
+A **GPU**, a computer chip that can do many checks at once, ran the experiment in Delta, a service for running programs on distant computers.
+
+> [!NOTE]
+> **For grown-ups.** The largest sample contained {{result.max_darts}} darts per trial. The run took {{result.seconds}} seconds on an {{result.device}}. The recorded errors are mean absolute errors across 50 trials. Data: [`results.csv`](results.csv).
+>
+> The estimator is $\hat\pi_N = \frac{4}{N}\sum_{i=1}^{N}\mathbf{1}[x_i^2+y_i^2\le 1]$. Random sampling has a typical error proportional to $N^{-1/2}$. Quasi-Monte Carlo uses evenly distributed points; its guarantees depend on the integrand and point construction [@niederreiter1992].
 
 ## Results
 
-Neat darts won every time, and their lead kept growing as we threw more darts:
+Team Halton had the smaller average error at every number of darts we tested.
 
-![A bar chart. With 64 darts, neat darts are 1.6 times more accurate. With 4,096 they are 5.8 times, with 262,144 they are 18 times, with about 17 million they are 65 times, and with about a billion they are 148 times more accurate.](race.png "How many times more accurate neat darts were than random darts, averaged over 50 tries each.")
+Its lead grew as the games got bigger.
 
-| Number of darts | Random darts: average miss | Neat darts: average miss | Neat darts are better by |
-|---:|---:|---:|---:|
-| 64 | 0.14 | 0.088 | 1.6× |
-| 4,096 | 0.019 | 0.0033 | 5.8× |
-| 262,144 | 0.0026 | 0.00015 | 17.5× |
-| 16,777,216 | 0.00034 | 0.0000053 | 65× |
-| 1,073,741,824 | 0.000039 | 0.00000026 | 148× |
+![A bar chart. With 64 darts, neat darts are 1.6 times more accurate. With 4,096 they are 5.8 times, with 262,144 they are 18 times, with about 17 million they are 65 times, and with about a billion they are 148 times more accurate.](race.png "How many times smaller Team Halton's average miss was than Team Random's, for each number of darts. Each bar compares 50 games per team.")
 
-What does that mean for π itself? The real π starts 3.1415927. With a billion random darts, a typical guess was off by about 0.00004, something like 3.14163: only the first **5** digits right. With a billion neat darts, a typical guess was off by about 0.0000003, something like 3.1415930: the first **7** digits right.
+At the smallest size, the difference was modest. At about a billion darts, Team Halton’s average miss was about {{result.better_by_1b}} times smaller.
+
+That compares the teams’ average misses. It does not mean every Halton guess beat every random guess.
 
 > [!TAKEAWAY]
-> Placing the darts neatly made the guess about {{result.better_by_1b}} times more accurate at a billion darts, for free. But it improved more slowly than the textbook promise, because of the circle's curved edge.
-
-### How fast does each one improve?
-
-Scientists like to check how quickly the error shrinks as you add darts. This chart uses special "log" scales, where each big step along an axis means 10 times bigger. On these scales, a steeper line means faster improvement.
-
-![A chart with two falling lines. The random line falls gently. The neat line falls more steeply, but not as steeply as the dotted textbook line.](error.png "Average miss against number of darts, from 64 to a billion. Blue: random darts, falling at the square-root rate (dotted blue). Orange: neat darts, falling faster but not as fast as the textbook promise (dotted orange).")
-
-What we noticed:
-
-1. **Random darts behaved exactly as expected.** Their line has a slope of {{result.slope_random}}, very close to the −0.5 that the square root rule predicts.
-2. **Neat darts improved faster.** Their slope is {{result.slope_halton}}. In everyday terms, to make the guess 10 times more accurate you need about 20 times more neat darts, instead of 100 times more random darts.
-3. **But not as fast as the textbook says.** The textbook promise for neat points is a slope close to −1, which would mean 10 times more darts for 10 times more accuracy. The gap between the orange line and the dotted orange line keeps growing all the way to a billion darts.
-
-## Why the edge slows things down
-
-Think about which darts can ever be counted "wrong". A dart deep inside the slice is clearly inside, and a dart in the far corner is clearly outside. Only darts very close to the curved edge are tricky: a tiny nudge could flip them from "in" to "out".
-
-![A quarter circle with a yellow band along its curved edge. Darts deep inside or far outside are always counted correctly; only the yellow band near the edge matters.](the-edge.svg "All of the error comes from darts near the curved edge. A neat pattern made of straight rows and columns cannot line up perfectly with a curve. {diagram}")
-
-Neat darts are arranged in a very even, grid-like way, but a grid of straight rows and columns can never match a curve perfectly. So the curved edge always leaves some leftover error.
-
-Mathematicians have worked this out properly. He and Wang [@he2015] studied exactly this kind of "inside or outside" problem. Their result predicts a slope of −0.75 for a shape in 2D, and we measured {{result.slope_halton}}.
+> Spreading the darts carefully gave much closer guesses in this experiment. The way you choose your dots can matter a lot!
 
 > [!NOTE]
-> **For grown-ups.** He and Wang show that for randomized quasi-Monte Carlo on certain indicator functions in $d$ dimensions, the root-mean-square error is $O(N^{-1/2-1/(2d)})$, which is $O(N^{-3/4})$ when $d=2$. We report the mean absolute error, which should shrink at the same rate but with a different constant.
+> **For grown-ups.** At 262,144 darts, random sampling had mean absolute error {{result.random_error_262k}}, versus {{result.halton_error_262k}} for shifted Halton points: a factor of {{result.better_by_262k}}.
+>
+> At the largest sample, the errors were {{result.random_error_1b}} and {{result.halton_error_1b}}, respectively: a factor of {{result.better_by_1b}}.
 
-## What this does (and doesn't) show
+### Did more darts always help?
 
-- **One shape, flat on paper.** We only tried a quarter circle in 2D. Smooth problems with no sharp edges would probably let neat darts get closer to the textbook promise. Problems in many more dimensions would probably be harder. We did not test either.
-- **Close to the theory, not a proof.** Our {{result.slope_halton}} matches the −0.75 that He and Wang's work predicts, but we did not check that our exact setup meets every condition in their paper.
-- **Slopes are rough.** We fitted a straight line through 25 points. The first few points are noisy, and the slope moves by a few hundredths depending on which points you include.
-- **The 256-dart picture is just one try.** In that picture both kinds of darts happen to give the same guess. The real comparison is the average over 50 tries in the table above.
-- **Very small numbers.** At a billion darts the neat guesses are off by about 0.0000003. We used 64-bit numbers (about 16 digits), which is plenty for that, but we did not separately test how rounding inside the computer affects the very last points.
+Think of error as a distance you want to shrink.
+
+The next chart tracks that distance as we add darts. Lower means a closer guess.
+
+The chart squeezes huge numbers into a small space. Each large step along a scale means ten times as much. Scientists call this a **log scale**.
+
+![A chart with two falling lines. The random line falls gently. The neat line falls more steeply, but not as steeply as the dotted textbook line.](error.png "Average miss as we add darts, from 64 to about a billion. Blue: Team Random. Orange: Team Halton. The dotted lines show the pace each team would have in a perfect textbook case.")
+
+Both teams improved overall. Team Halton improved faster.
+
+But there is a catch in that picture. The dotted orange line shows a faster pace that neat points can approach in suitable problems. It is not a promise for every problem.
+
+Our circle game did not improve that quickly.
+
+## The tricky edge
+
+Imagine nudging a dart.
+
+If it is deep inside the slice, a tiny nudge leaves it inside. Far outside, it stays outside.
+
+Near the curved edge, the same nudge might change the answer.
+
+![A quarter circle with a yellow band along its curved edge. Darts deep inside or far outside are always counted correctly; only the yellow band near the edge matters.](the-edge.svg "Only darts near the curved edge (the yellow band) can tip from inside to outside. Darts deep inside or far outside are always counted the same way. {diagram}")
+
+The computer still follows a clear rule for counting each dart. The difficulty is making the whole set of dots represent the slice fairly.
+
+An “inside or outside” answer changes suddenly at the edge. That makes this game harder than problems where the answer changes gently.
+
+The picture gives you an idea of the difficulty. Halton dots do not actually form ordinary rows and columns, and our experiment did not prove that the curve alone caused the pace we saw.
+
+Researchers He and Wang studied related problems with sudden changes [@he2015]. Their work offers a useful clue.
+
+> [!NOTE]
+> **For grown-ups.** Fitted log-log slopes were {{result.slope_random}} for random sampling and {{result.slope_halton}} for shifted Halton sampling.
+>
+> He and Wang establish root-mean-square error rates of $O(N^{-1/2-1/(2d)})$ under particular assumptions and randomized constructions. In two dimensions this is $O(N^{-3/4})$. Our fitted slope is numerically close to that exponent, but we have not established that the theorem applies to this exact construction. We measured mean absolute error, not root-mean-square error. A fitted slope is not a proof of a convergence rate.
+
+## What can you trust?
+
+**This game had a clear winner.** Carefully spread darts gave smaller average misses at every size we tested.
+
+**We tried only one shape on a flat square.** Other shapes, other recipes and other kinds of puzzles could behave differently. We did not test them.
+
+**A trend is a clue, not a rule for forever.** Our lines describe the sizes we tried. Choosing a different part of the chart can change their measured steepness.
+
+**Computers round numbers too.** We used numbers with room for many digits, but did not separately test whether tiny rounding effects changed the last few results.
+
+And remember the first pair of dot pictures? They tied. That is why we repeated the game.
+
+You can try the paper version yourself. Place dots by chance, then try spreading them carefully. Count, compare and wonder. Your drawing will not settle the whole question—but it can help you see why scientists ask it.

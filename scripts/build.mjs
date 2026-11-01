@@ -8,6 +8,7 @@ import markedKatex from 'marked-katex-extension';
 import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js';
 import matter from 'gray-matter';
+import { validatePost } from './lib/post-schema.mjs';
 import { viewerKind, langOf, renderCode, renderCsv, renderNotebook } from './viewers.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -273,11 +274,21 @@ function expandIncludes(md, dir, slug) {
   });
 }
 
+// every file under a post folder, post-relative posix paths
+function listAll(dir, sub = '') {
+  return fs.readdirSync(path.join(dir, sub), { withFileTypes: true }).flatMap((e) => {
+    const rel = sub ? `${sub}/${e.name}` : e.name;
+    return e.isDirectory() ? listAll(dir, rel) : [rel];
+  });
+}
+
 function loadPost(id) {
   const [user, slug] = id.split('/');
   const dir = path.join(POSTS, user, slug);
   const { data: fm, content } = matter(fs.readFileSync(path.join(dir, 'index.md'), 'utf8'));
   for (const field of ['title', 'date']) if (!fm[field]) errors.push(`${id}: front matter is missing "${field}"`);
+  // schema: errors, or warnings for drafts
+  for (const m of validatePost({ fm, markdown: content, folderUser: user, files: listAll(dir) })) (fm.draft ? warnings : errors).push(`${id}: ${m}`);
   const refsPath = path.join(dir, 'refs.json');
   const refList = fs.existsSync(refsPath) ? JSON.parse(fs.readFileSync(refsPath, 'utf8')) : [];
   const refs = Object.fromEntries(refList.map((r) => [r.key, r]));

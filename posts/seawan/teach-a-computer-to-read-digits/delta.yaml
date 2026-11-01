@@ -1,0 +1,19 @@
+version: 1
+deployment: domestic
+sandbox:
+  image: "PyTorch CUDA13 (GPU)"
+  cpu: 2
+  memory: 8Gi
+  gpu: 1
+  gpu_mem: 8000
+  max_life: 60
+upload: "."
+setup: "pip install matplotlib numpy pyarrow pillow huggingface_hub"
+command: "python experiment.py"
+timeout: 1800
+outputs:
+  - results.csv
+  - examples.png
+  - learning.png
+  - mistakes.png
+  - mixups.png

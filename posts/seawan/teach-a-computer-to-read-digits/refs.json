@@ -1,0 +1,33 @@
+[
+  {
+    "key": "lecun1998",
+    "title": "Gradient-based learning applied to document recognition",
+    "authors": [
+      "Y. Lecun",
+      "L. Bottou",
+      "Y. Bengio",
+      "P. Haffner"
+    ],
+    "year": 1998,
+    "doi": "10.1109/5.726791",
+    "claim": "Introduces convolutional networks trained by gradient descent for reading handwritten digits, and the MNIST digit dataset.",
+    "verified": true,
+    "verified_via": "Crossref",
+    "verified_on": "2026-11-01",
+    "venue": "Proceedings of the IEEE"
+  },
+  {
+    "key": "kingma2014",
+    "title": "Adam: A Method for Stochastic Optimization",
+    "authors": [
+      "Diederik P. Kingma",
+      "Jimmy Ba"
+    ],
+    "year": 2014,
+    "arxiv": "1412.6980",
+    "claim": "The Adam optimizer we use to adjust the network's numbers during training.",
+    "verified": true,
+    "verified_via": "arXiv",
+    "verified_on": "2026-11-01"
+  }
+]

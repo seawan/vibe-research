@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" font-family="Helvetica, Arial, sans-serif">
+  <title>Only darts near the edge of the circle are tricky</title>
+  <defs><clipPath id="sq"><rect x="40" y="30" width="300" height="300"/></clipPath></defs>
+  <rect x="0" y="0" width="640" height="360" fill="#ffffff"/>
+  <rect x="40" y="30" width="300" height="300" fill="#f3f4f6" stroke="#111827" stroke-width="3"/>
+  <path d="M40 330 L40 30 A300 300 0 0 1 340 330 Z" fill="#dcfce7"/>
+  <path d="M40 10 A320 320 0 0 1 360 330 L320 330 A280 280 0 0 0 40 50 Z" fill="#fde047" opacity="0.75" clip-path="url(#sq)"/>
+  <path d="M40 30 A300 300 0 0 1 340 330" fill="none" stroke="#111827" stroke-width="2" stroke-dasharray="6 4"/>
+  <rect x="40" y="30" width="300" height="300" fill="none" stroke="#111827" stroke-width="3"/>
+  <text x="120" y="250" font-size="18" fill="#166534">deep inside:</text>
+  <text x="120" y="272" font-size="18" fill="#166534">always counted right</text>
+  <text x="380" y="70" font-size="18" fill="#111827">Far outside (top-right corner):</text>
+  <text x="380" y="94" font-size="18" fill="#111827">also counted right</text>
+  <text x="380" y="170" font-size="18" fill="#854d0e" font-weight="bold">Yellow band = near the edge.</text>
+  <text x="380" y="196" font-size="18" fill="#854d0e">Here a tiny nudge flips</text>
+  <text x="380" y="220" font-size="18" fill="#854d0e">"inside" to "outside".</text>
+  <text x="380" y="270" font-size="16" fill="#374151">All of the error comes</text>
+  <text x="380" y="292" font-size="16" fill="#374151">from this curved band.</text>
+</svg>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" font-family="Helvetica, Arial, sans-serif">
+  <title>A square with a quarter circle inside it</title>
+  <rect x="0" y="0" width="640" height="360" fill="#ffffff"/>
+  <rect x="40" y="30" width="300" height="300" fill="#f3f4f6" stroke="#111827" stroke-width="3"/>
+  <path d="M40 330 L40 30 A300 300 0 0 1 340 330 Z" fill="#fde2d3" stroke="#c2410c" stroke-width="3"/>
+  <text x="120" y="250" font-size="20" fill="#9a3412">quarter circle</text>
+  <text x="290" y="60" font-size="16" fill="#374151" text-anchor="end">square</text>
+  <text x="190" y="352" font-size="15" fill="#374151" text-anchor="middle">side = 1</text>
+  <text x="370" y="80" font-size="19" fill="#111827">Square area = 1 × 1 = 1</text>
+  <text x="370" y="120" font-size="19" fill="#9a3412">Quarter circle area = π ÷ 4</text>
+  <text x="370" y="150" font-size="16" fill="#6b7280">(about 0.785)</text>
+  <text x="370" y="210" font-size="19" fill="#111827">So darts land inside</text>
+  <text x="370" y="238" font-size="19" fill="#111827">about π ÷ 4 of the time.</text>
+  <text x="370" y="290" font-size="19" fill="#111827" font-weight="bold">π ≈ 4 × inside ÷ all</text>
+</svg>

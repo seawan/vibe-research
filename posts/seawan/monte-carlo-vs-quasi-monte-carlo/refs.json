@@ -1,0 +1,75 @@
+[
+  {
+    "key": "metropolis1949",
+    "title": "The Monte Carlo Method",
+    "authors": [
+      "Nicholas Metropolis",
+      "S. Ulam"
+    ],
+    "year": 1949,
+    "doi": "10.1080/01621459.1949.10483310",
+    "claim": "Early paper introducing the Monte Carlo method: estimating quantities by random sampling.",
+    "verified": true,
+    "verified_via": "Crossref",
+    "verified_on": "2026-11-01",
+    "venue": "Journal of the American Statistical Association"
+  },
+  {
+    "key": "halton1960",
+    "title": "On the efficiency of certain quasi-random sequences of points in evaluating multi-dimensional integrals",
+    "authors": [
+      "J. H. Halton"
+    ],
+    "year": 1960,
+    "claim": "Introduces the Halton sequence (radical inverses in coprime bases) for multi-dimensional integration.",
+    "verified": true,
+    "verified_via": "Crossref",
+    "verified_on": "2026-11-01",
+    "doi": "10.1007/bf01386213",
+    "venue": "Numerische Mathematik"
+  },
+  {
+    "key": "niederreiter1992",
+    "title": "Random Number Generation and Quasi-Monte Carlo Methods",
+    "authors": [
+      "Harald Niederreiter"
+    ],
+    "year": 1992,
+    "doi": "10.1137/1.9781611970081",
+    "claim": "Standard reference for discrepancy, the Koksma–Hlawka inequality and the (log N)^d/N error of QMC.",
+    "verified": true,
+    "verified_via": "Crossref",
+    "verified_on": "2026-11-01",
+    "venue": "Society for Industrial and Applied Mathematics"
+  },
+  {
+    "key": "cranley1976",
+    "title": "Randomization of Number Theoretic Methods for Multiple Integration",
+    "authors": [
+      "R. Cranley",
+      "T. N. L. Patterson"
+    ],
+    "year": 1976,
+    "doi": "10.1137/0713071",
+    "claim": "Random shift (Cranley–Patterson rotation) of a lattice/point set to get unbiased estimates with error bars.",
+    "verified": true,
+    "verified_via": "Crossref",
+    "verified_on": "2026-11-01",
+    "venue": "SIAM Journal on Numerical Analysis"
+  },
+  {
+    "key": "he2015",
+    "title": "On the convergence rate of randomized quasi-Monte Carlo for discontinuous functions",
+    "authors": [
+      "Zhijian He",
+      "Xiaoqun Wang"
+    ],
+    "year": 2015,
+    "claim": "For discontinuous integrands (like an indicator of a disk) RQMC converges slower than 1/N; rate depends on dimension.",
+    "verified": true,
+    "verified_via": "Crossref",
+    "verified_on": "2026-11-01",
+    "doi": "10.1137/15m1007963",
+    "venue": "SIAM Journal on Numerical Analysis"
+  }
+]

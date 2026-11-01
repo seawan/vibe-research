@@ -38,6 +38,17 @@ npm run rerun -- posts/<user>/<slug> --record   # run on Delta, pull outputs, wr
 - `.github/workflows/pr-comment.yml` (`workflow_run` after PR checks): downloads only `pr-report` and creates or updates one checklist comment on the PR. It never checks out or runs PR code.
 - `.github/CODEOWNERS`: every merge needs the owner's review. Takedown = revert.
 
+## Maintainer: reference cache
+
+CI re-checks references against `refcache.json` from the base branch and never writes it back. Local `check-refs` runs update the repo-root `refcache.json`; to fill it for every post, run on `main`:
+
+```bash
+npm run refcache:refresh   # check-refs on every posts/<user>/<slug>/ with refs.json
+git add refcache.json && git commit -m "chore: refresh refcache"
+```
+
+Review any `refs.json` changes it makes (e.g. new `verified_on` dates) and commit or discard them separately. Contributor PRs must not touch `refcache.json`.
+
 ## Deploy (GitHub Pages)
 
 `site.config.json` holds `siteUrl` (`https://seawan.github.io`), `baseUrl` (`/vibe-research/`) and `repo`. In the repo settings, set **Pages → Source** to **GitHub Actions**. Every push to `main` runs `.github/workflows/deploy.yml`: `npm test`, then a strict `npm run build`, then deploy.

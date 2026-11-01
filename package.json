@@ -8,6 +8,7 @@
     "serve": "node scripts/serve.mjs",
     "new": "node scripts/new-post.mjs",
     "check-refs": "node scripts/check-refs.mjs",
+    "refcache:refresh": "node scripts/refcache-refresh.mjs",
     "test": "node --test \"test/**/*.test.mjs\"",
     "rerun": "node scripts/vibe-rerun.mjs"
   },

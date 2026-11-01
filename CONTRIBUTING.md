@@ -69,7 +69,7 @@ By opening a PR you confirm that you have the right to publish everything in you
 
 The **PR checks** workflow runs with a read-only token and checks:
 
-- the PR only changes files inside `posts/<user>/<slug>/` folders (nothing else, including `refcache.json`);
+- the PR only changes files inside `posts/<user>/<slug>/` folders (nothing else, including `refcache.json`: running `check-refs` locally updates it, so leave that change out of your PR, e.g. `git checkout -- refcache.json`);
 - a new post lives in your own folder (named exactly as your GitHub login, same case) and lists you in `authors`; an existing post may only be changed by someone listed in its `authors` **on `main`** (adding yourself to someone else's post in the same PR does not count);
 - file types, file sizes and post sizes, as above;
 - `npm test`, a references re-check (`check-refs --ci`: `verified` flags in your `refs.json` are not trusted; a network failure is reported as "retry", not as a failure), and a full build including drafts (front matter, required sections, figure provenance, badge).
@@ -106,7 +106,7 @@ Readers rerun a published post with `npx -y github:seawan/vibe-research#<commit>
 ```bash
 npm ci
 npm test
-npm run check-refs -- posts/<you>/<slug>   # verify refs.json
+npm run check-refs -- posts/<you>/<slug>   # verify refs.json (also updates refcache.json: do not commit that)
 npm run serve                              # http://localhost:4321, drafts shown
 npm run build                              # strict build, as on main
 ```

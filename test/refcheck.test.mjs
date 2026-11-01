@@ -111,3 +111,23 @@ test('cli --cache <path> overrides the cache location, before or after the post 
   assert.ok(readJSON(other)['doi:10.5555/3295222']);
   assert.equal(fs.existsSync(cachePath), false);
 });
+
+test('cli without --ci writes found entries into the cache (local runs fill refcache.json)', async () => {
+  const { d, cachePath } = tmpPost([{ ...base(), verified: false }]);
+  assert.equal(await runCli([d], { fetchImpl: stub(), cachePath, fast: true, log: () => {} }), 0);
+  assert.ok(readJSON(cachePath)['doi:10.5555/3295222']);
+});
+
+test('refcache:refresh checks every post with refs.json into one cache', async () => {
+  const { refreshAll } = await import('../scripts/refcache-refresh.mjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-refresh-'));
+  for (const id of ['a/one', 'b/two', 'b/norefs']) fs.mkdirSync(path.join(root, id), { recursive: true });
+  fs.writeFileSync(path.join(root, 'a/one/refs.json'), JSON.stringify([{ ...base(), verified: false }]));
+  fs.writeFileSync(path.join(root, 'b/two/refs.json'), JSON.stringify([]));
+  const cachePath = path.join(root, 'cache.json');
+  const seen = [];
+  const code = await refreshAll({ postsDir: root, cachePath, fetchImpl: stub(), fast: true, log: (m) => seen.push(m) });
+  assert.equal(code, 0);
+  assert.ok(readJSON(cachePath)['doi:10.5555/3295222']);
+  assert.ok(seen.join('\n').includes('a/one') && seen.join('\n').includes('b/two') && !seen.join('\n').includes('norefs'));
+});

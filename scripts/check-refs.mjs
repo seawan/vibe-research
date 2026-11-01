@@ -10,6 +10,8 @@
 // --ci never trusts incoming `verified` flags, uses refcache.json at the repo root, and writes
 //   <postDir>/.refcheck-status = ok | retry | failed (exit 1 only for failed).
 // --cache <path> reads/writes the cache there instead (CI passes a copy of the base branch's refcache.json).
+// Local (non-CI) runs write refcache.json at the repo root; CI never writes it (only a --cache copy).
+// Maintainers refresh it for every post with `npm run refcache:refresh` (scripts/refcache-refresh.mjs).
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,7 +42,7 @@ export async function runCli(argv, { fetchImpl = fetch, cachePath = defaultCache
   const out = res.refs.map((r) => (!CI && res.networkFailedKeys.includes(r.key) ? original.find((o) => o.key === r.key) ?? r : r));
   fs.writeFileSync(refsPath, JSON.stringify(out, null, 2) + '\n');
   fs.writeFileSync(path.join(postDir, '.refcheck.json'), JSON.stringify({ checked_on: today, refs: res.abstracts }, null, 2) + '\n');
-  if (CI) fs.writeFileSync(cachePath, JSON.stringify(res.cache, null, 2) + '\n');
+  if (!CI || path.resolve(cachePath) !== path.resolve(defaultCache)) fs.writeFileSync(cachePath, JSON.stringify(res.cache, null, 2) + '\n');
   log(`\n${refs.length - res.unverified.length}/${refs.length} references verified. Abstracts saved to ${path.join(postDir, '.refcheck.json')}`);
 
   if (CI) {

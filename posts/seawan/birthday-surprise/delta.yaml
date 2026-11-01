@@ -1,0 +1,16 @@
+version: 1
+deployment: domestic
+sandbox:
+  image: "PyTorch CUDA13 (GPU)"
+  cpu: 2
+  memory: 4Gi
+  gpu: 0
+  max_life: 30
+upload: "."
+setup: "pip install matplotlib numpy"
+command: "python experiment.py"
+timeout: 1200
+outputs:
+  - results.csv
+  - chance.png
+  - ten-classes.png

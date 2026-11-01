@@ -62,6 +62,9 @@ export function parseOutput(stdout, code, stderr = '') {
     if (lines.length) complete.stdout = lines.map((t) => (t.endsWith('\n') ? t : `${t}\n`)).join('');
     return { json: complete, stdout };
   }
+  // stream ended without a complete frame: hand back the execution id so the caller can poll for the result
+  const init = frames.find((f) => f?.type === 'init' && f.execution_id);
+  if (init && frames.length) return { json: { type: 'incomplete', execution_id: init.execution_id }, stdout };
   const ok = envelopes.findLast((e) => e?.ok === true);
   if (ok) return { json: ok, stdout };
   if (code !== 0) throw new DeltaError('internal', `delta-cli exited with code ${code}: ${tail(stderr || stdout) || '(no output)'}`);

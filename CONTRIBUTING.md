@@ -63,14 +63,14 @@ By opening a PR you confirm that you have the right to publish everything in you
 
 - At most **5 MB per file** and **25 MB per post**. Large datasets and checkpoints must be linked, not committed; fetch them in `setup` of `delta.yaml`.
 - Allowed file types: `md json yaml yml csv tsv txt py ipynb jl r sh js mjs ts lean c cpp h rs go java m tex bib toml cfg ini png jpg jpeg gif webp svg pdf`. No executables, no HTML, no files without an extension, no symlinks.
-- SVG files must not contain scripts, event handlers or `javascript:` URLs.
+- SVG files are checked against a strict allowlist: only plain drawing elements (`svg g defs symbol use path rect circle ellipse line polyline polygon text tspan textPath title desc linearGradient radialGradient stop clipPath mask pattern marker image`), no `<style>`, `<script>`, `<foreignObject>`, `<a>` or animation elements, no namespaced elements, no `on*` attributes, no DOCTYPE/entities (only `&amp; &lt; &gt; &quot; &apos;`), and links only to `#fragments` or files in the post. Matplotlib SVGs include `<metadata>` and `<style>` and are rejected: prefer PNG, or strip those elements.
 
 ## What CI checks on your PR
 
 The **PR checks** workflow runs with a read-only token and checks:
 
 - the PR only changes files inside `posts/<user>/<slug>/` folders (nothing else, including `refcache.json`);
-- a new post lives in your own folder and lists you in `authors`; an existing post may only be changed by someone listed in its `authors` **on `main`** (adding yourself to someone else's post in the same PR does not count);
+- a new post lives in your own folder (named exactly as your GitHub login, same case) and lists you in `authors`; an existing post may only be changed by someone listed in its `authors` **on `main`** (adding yourself to someone else's post in the same PR does not count);
 - file types, file sizes and post sizes, as above;
 - `npm test`, a references re-check (`check-refs --ci`: `verified` flags in your `refs.json` are not trusted; a network failure is reported as "retry", not as a failure), and a full build including drafts (front matter, required sections, figure provenance, badge).
 

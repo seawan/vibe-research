@@ -4,7 +4,61 @@ export const LIMITS = { fileBytes: 5_000_000, postBytes: 25_000_000 };
 export const MANUAL_ITEMS = ['claims match cited sources', 'AI & contribution statement plausible', 'author verification is specific'];
 export const REPORT_MARKER = '<!-- vibe-research-report -->';
 
-const SVG_ACTIVE = /<script|on\w+\s*=|javascript:/i;
+// SVG: allowlist scanner (no script, foreignObject, links, animation, style element, external refs)
+export const SVG_ELEMENTS = new Set('svg g defs symbol use path rect circle ellipse line polyline polygon text tspan textPath title desc linearGradient radialGradient stop clipPath mask pattern marker image'.split(' '));
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const XML_NAME = /^[A-Za-z_][\w.:-]*/;
+
+// Returns a reason the SVG is unsafe, or null.
+export function svgProblem(text) {
+  const t = String(text ?? '');
+  if (/<!DOCTYPE|<!ENTITY|<\?xml-stylesheet/i.test(t)) return 'DOCTYPE, ENTITY and xml-stylesheet are not allowed';
+  const ref = /&(?!(?:amp|lt|gt|quot|apos);)[^;\s]{0,12};?/.exec(t);
+  if (ref) return `character/entity reference ${ref[0]} is not allowed (only &amp; &lt; &gt; &quot; &apos;)`;
+  let i = 0;
+  while ((i = t.indexOf('<', i)) >= 0) {
+    const skip = (open, close) => { const e = t.indexOf(close, i + open.length); return e < 0 ? -1 : e + close.length; };
+    if (t.startsWith('<!--', i)) { i = skip('<!--', '-->'); if (i < 0) return 'unclosed comment'; continue; }
+    if (t.startsWith('<![CDATA[', i)) { i = skip('<![CDATA[', ']]>'); if (i < 0) return 'unclosed CDATA'; continue; }
+    if (t.startsWith('<?', i)) {
+      if (!/^<\?xml\s/.test(t.slice(i, i + 6))) return 'processing instructions other than <?xml ...?> are not allowed';
+      i = skip('<?', '?>'); if (i < 0) return 'unclosed <?xml'; continue;
+    }
+    if (t.startsWith('<!', i)) return 'markup declarations are not allowed';
+    const closing = t[i + 1] === '/';
+    let j = i + (closing ? 2 : 1);
+    const name = XML_NAME.exec(t.slice(j))?.[0];
+    if (!name) return 'malformed tag';
+    if (!SVG_ELEMENTS.has(name)) return `element <${name}> is not allowed`;
+    j += name.length;
+    if (closing) { const m = /^\s*>/.exec(t.slice(j)); if (!m) return `malformed </${name}>`; i = j + m[0].length; continue; }
+    for (;;) {
+      const end = /^\s*(\/?>)/.exec(t.slice(j));
+      if (end) { j += end[0].length; break; }
+      const a = /^\s+([^\s=\/>]+)\s*=\s*("[^"]*"|'[^']*')/.exec(t.slice(j));
+      if (!a) return `malformed attributes in <${name}>`;
+      const [attr, value] = [a[1], a[2].slice(1, -1)];
+      const bad = attrProblem(attr, value);
+      if (bad) return `<${name} ${attr}>: ${bad}`;
+      j += a[0].length;
+    }
+    i = j;
+  }
+  return null;
+}
+
+function attrProblem(attr, value) {
+  if (/^on/i.test(attr)) return 'event handlers are not allowed';
+  if (attr === 'xmlns') return value === SVG_NS ? null : `default namespace must be ${SVG_NS}`;
+  if (attr.includes(':') && !/^xmlns:[\w.-]+$/.test(attr) && attr !== 'xlink:href') return 'namespaced attributes are not allowed (except xmlns:* and xlink:href)';
+  if (attr === 'style' && /url\s*\(|expression|javascript/i.test(value)) return 'style must not contain url(), expression or javascript';
+  if (attr === 'href' || attr === 'xlink:href') {
+    const v = value.replace(/[\x00-\x20\x7f]/g, '');
+    if (v.startsWith('#')) return null;
+    if (!v || /^[a-z][a-z\d+.-]*:/i.test(v) || v.startsWith('/') || v.includes('\\') || v.split(/[?#]/)[0].split('/').includes('..')) return 'links must be #fragments or relative paths inside the post';
+  }
+  return null;
+}
 const mb = (n) => `${(n / 1e6).toFixed(1)} MB`;
 const lower = (a) => (a ?? []).map((s) => String(s).toLowerCase());
 
@@ -32,14 +86,15 @@ export function checkPr({ changed, prAuthor, baseAuthors, headAuthors, postBytes
     if (f.mode === '120000' || f.mode === '160000') v.push(`${f.path}: symlinks and submodules are not allowed`);
     else if (!ALLOWED_EXTENSIONS.includes(ext)) v.push(`${f.path}: file type ${ext ? `.${ext}` : '(no extension)'} is not allowed (see CONTRIBUTING.md)`);
     if (f.size > LIMITS.fileBytes) v.push(`${f.path}: ${mb(f.size)} is over the ${mb(LIMITS.fileBytes)} per-file limit; link large data instead`);
-    if (ext === 'svg' && SVG_ACTIVE.test(f.content ?? '')) v.push(`${f.path}: SVG contains script, event handlers or javascript: URLs`);
+    const svg = ext === 'svg' && svgProblem(f.content);
+    if (svg) v.push(`${f.path}: unsafe SVG: ${svg}`);
   }
   for (const p of posts.values()) {
     const base = baseAuthors(p.id);
     if (base) {
       if (!lower(base).includes(me)) v.push(`posts/${p.id}/: ${prAuthor} is not an author of this post on the base branch (authors: ${base.join(', ') || 'none'})`);
     } else {
-      if (p.user.toLowerCase() !== me) v.push(`posts/${p.id}/: a new post must be in your own folder posts/${prAuthor}/`);
+      if (p.user !== String(prAuthor)) v.push(`posts/${p.id}/: a new post must be in your own folder posts/${prAuthor}/`);
       else if (!lower(headAuthors(p.id)).includes(me)) v.push(`posts/${p.id}/: ${prAuthor} must be listed in authors`);
     }
     const total = postBytes ? postBytes(p.id) : p.bytes;

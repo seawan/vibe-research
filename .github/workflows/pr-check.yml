@@ -25,6 +25,12 @@ jobs:
         with:
           fetch-depth: 0 # base and head commits for the diff, full history for post dates
           persist-credentials: false
+      - name: Fallback report (replaced by the policy step)
+        run: |
+          mkdir -p pr-report
+          printf '%s\n' "$PR_NUMBER" > pr-report/pr-number
+          printf '## Vibe Research checks for PR #%s\n\nThe checks did not finish; see the run log.\n' "$PR_NUMBER" > pr-report/checklist.md
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -38,7 +44,9 @@ jobs:
 
       - id: posts
         name: List changed posts
+        continue-on-error: true
         run: |
+          : > "$RUNNER_TEMP/posts.txt"
           node scripts/check-pr.mjs --base "$BASE" --head "$HEAD" --list-posts > "$RUNNER_TEMP/posts.txt"
           cat "$RUNNER_TEMP/posts.txt"
 
@@ -59,7 +67,6 @@ jobs:
         name: npm run build:drafts
         continue-on-error: true
         run: |
-          mkdir -p pr-report
           # a network failure in check-refs is "retry", not "fail": don't fail the build on those refs
           extra=""
           if grep -qx retry posts/*/*/.refcheck-status 2>/dev/null; then
@@ -73,12 +80,14 @@ jobs:
         continue-on-error: true
         env:
           TEST_OUTCOME: ${{ steps.test.outcome }}
+          POSTS_OUTCOME: ${{ steps.posts.outcome }}
           REFS_OUTCOME: ${{ steps.refs.outcome }}
           BUILD_OUTCOME: ${{ steps.build.outcome }}
         run: |
           node scripts/check-pr.mjs --base "$BASE" --head "$HEAD" --author "$PR_AUTHOR" --pr "$PR_NUMBER" \
             --build-summary pr-report/build.json \
             --result "npm test=$TEST_OUTCOME" \
+            --result "list changed posts=$POSTS_OUTCOME" \
             --result "references (check-refs --ci)=$REFS_OUTCOME" \
             --result "build:drafts=$BUILD_OUTCOME"
 
@@ -102,7 +111,7 @@ jobs:
 
       - name: Fail if any check failed
         env:
-          OUTCOMES: ${{ steps.test.outcome }} ${{ steps.refs.outcome }} ${{ steps.build.outcome }} ${{ steps.policy.outcome }}
+          OUTCOMES: ${{ steps.test.outcome }} ${{ steps.posts.outcome }} ${{ steps.refs.outcome }} ${{ steps.build.outcome }} ${{ steps.policy.outcome }}
         run: |
           echo "outcomes: $OUTCOMES"
           for o in $OUTCOMES; do [ "$o" = success ] || exit 1; done

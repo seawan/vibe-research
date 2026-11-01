@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { checkPr, ALLOWED_EXTENSIONS, LIMITS, checklistMd } from '../scripts/lib/pr-policy.mjs';
+import { checkPr, ALLOWED_EXTENSIONS, LIMITS, checklistMd, svgProblem } from '../scripts/lib/pr-policy.mjs';
 import { runCli } from '../scripts/check-pr.mjs';
 
 const authorsOf = (map) => (id) => map[id] ?? null;
@@ -34,6 +34,9 @@ test('rejects editing another user\'s post', () => {
   assert.match(v[0], /bob\/old/);
   // a new post in someone else's folder is rejected even if the PR author lists themselves
   assert.ok(run([f('posts/bob/fresh/index.md')], { head: { 'bob/fresh': ['bob', 'alice'] } }).length > 0);
+  // a new post's folder must match the login exactly; existing posts compare case-insensitively
+  assert.ok(run([f('posts/Alice/fresh/index.md')], { head: { 'Alice/fresh': ['alice'] } }).length > 0);
+  assert.deepEqual(run([f('posts/bob/old/index.md')], { prAuthor: 'Alice', base: { 'bob/old': ['bob', 'alice'] } }), []);
   // a new post whose authors don't include the PR author
   assert.ok(run([f('posts/alice/fresh/index.md')], { head: { 'alice/fresh': ['bob'] } }).length > 0);
 });
@@ -73,13 +76,56 @@ test('rejects post over 25 MB', () => {
   assert.equal(w.length, 1);
 });
 
+const svgV = (content, name = 'fig.svg') => run([f(`posts/alice/new/${name}`, content.length, { content })], { head: { 'alice/new': ['alice'] } });
+const NS = 'xmlns="http://www.w3.org/2000/svg"';
+
 test('rejects svg containing script', () => {
-  const bad = ['<svg><script>alert(1)</script></svg>', '<svg><rect onload ="x()"/></svg>', '<svg><a href="javascript:x()"/></svg>'];
-  for (const content of bad) {
-    const v = run([f('posts/alice/new/fig.svg', content.length, { content })], { head: { 'alice/new': ['alice'] } });
-    assert.equal(v.length, 1, content);
-  }
-  assert.deepEqual(run([f('posts/alice/new/fig.svg', 30, { content: '<svg><rect width="1"/></svg>' })], { head: { 'alice/new': ['alice'] } }), []);
+  const bad = {
+    plain: `<svg ${NS}><script>alert(1)</script></svg>`,
+    handler: `<svg ${NS}><rect onload ="x()"/></svg>`,
+    anchor: `<svg ${NS}><a href="javascript:x()"><text>x</text></a></svg>`,
+    namespacedScript: `<s:svg xmlns:s="http://www.w3.org/2000/svg"><s:script>alert(1)</s:script></s:svg>`,
+    namespacedScriptInSvg: `<svg ${NS} xmlns:h="http://www.w3.org/1999/xhtml"><h:script>alert(1)</h:script></svg>`,
+    charRefScheme: `<svg ${NS} xmlns:xlink="http://www.w3.org/1999/xlink"><use xlink:href="&#106;avascript:alert(1)"/></svg>`,
+    tabInScheme: `<svg ${NS}><image href="java\tscript:alert(1)"/></svg>`,
+    foreignObject: `<svg ${NS}><foreignObject><iframe xmlns="http://www.w3.org/1999/xhtml" srcdoc="x"/></foreignObject></svg>`,
+    doctypeEntity: `<!DOCTYPE svg [<!ENTITY x "&#60;script&#62;alert(1)&#60;/script&#62;">]><svg ${NS}>&x;</svg>`,
+    styleElement: `<svg ${NS}><style>rect{fill:red}</style></svg>`,
+    styleUrl: `<svg ${NS}><rect style="fill:url(https://evil.example/x)"/></svg>`,
+    animate: `<svg ${NS}><rect><set attributeName="href" to="javascript:x()"/></rect></svg>`,
+    externalImage: `<svg ${NS}><image href="https://evil.example/track.png"/></svg>`,
+    protocolRelative: `<svg ${NS}><image href="//evil.example/x.png"/></svg>`,
+    parentPath: `<svg ${NS}><image href="../../bob/old/x.png"/></svg>`,
+    xhtmlDefaultNs: `<svg xmlns="http://www.w3.org/1999/xhtml"><title>x</title></svg>`,
+    stylesheetPi: `<?xml-stylesheet href="x.css"?><svg ${NS}/>`,
+    unquotedAttr: `<svg ${NS}><rect width=1/></svg>`,
+  };
+  for (const [k, content] of Object.entries(bad)) assert.equal(svgV(content).length, 1, k);
+  // uppercase extension is still an SVG
+  assert.equal(svgV(bad.plain, 'FIG.SVG').length, 1);
+});
+
+test('accepts a benign matplotlib-style svg', () => {
+  const ok = `<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!-- Created with matplotlib (https://matplotlib.org/) -->
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="460.8pt" height="345.6pt" viewBox="0 0 460.8 345.6" ${NS} version="1.1">
+ <defs>
+  <clipPath id="p1"><rect x="57.6" y="41.47" width="357.12" height="266.11"/></clipPath>
+  <path id="m0" d="M 0 0 L 0 3.5" style="stroke: #000000; stroke-width: 0.8"/>
+ </defs>
+ <g id="figure_1">
+  <path d="M 0 345.6 L 460.8 345.6 L 460.8 0 L 0 0 z" style="fill: #ffffff"/>
+  <use xlink:href="#m0" x="73.83" y="307.58" style="stroke: #000000"/>
+  <use href="#m0" x="80" y="307.58"/>
+  <image href="inset.png" x="0" y="0" width="10" height="10"/>
+  <polyline points="1,2 3,4" clip-path="url(#p1)" fill="none"/>
+  <text x="10" y="20" style="font-size: 10px; font-family: 'DejaVu Sans'">n_iterations=100 &amp; error &lt; 1e-3, onset = 2</text>
+  <![CDATA[ ignored <script> text ]]>
+ </g>
+</svg>
+`;
+  assert.deepEqual(svgV(ok), []);
+  assert.equal(svgProblem(ok), null);
 });
 
 test('rejects symlinks and submodules', () => {
@@ -178,4 +224,13 @@ test('cli: co-author deletes a file and renames are seen as delete + add', () =>
 test('cli: rejects invalid --pr', () => {
   const r = repo();
   assert.equal(cli(r.d, ['--base', r.base, '--head', r.base, '--author', 'alice', '--pr', '7; rm -rf /']).code, 1);
+});
+
+test('cli: folder names are matched literally, never as pathspec globs', () => {
+  const r = repo();
+  r.write('posts/bob/o*/index.md', FM(['bob']));
+  r.write('posts/bob/o*/run.py', 'print(3)\n');
+  r.git('add', '-A'); r.git('commit', '-q', '-m', 'glob-named post');
+  const { code, md } = cli(r.d, ['--base', r.base, '--head', r.git('rev-parse', 'HEAD'), '--author', 'bob', '--pr', '11']);
+  assert.equal(code, 0, md);
 });

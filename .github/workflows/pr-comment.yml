@@ -39,20 +39,38 @@ jobs:
           pr=$(head -c 20 "$REPORT/pr-number" | tr -d '[:space:]')
           if ! [[ "$pr" =~ ^[1-9][0-9]{0,9}$ ]]; then echo "::error::pr-number is not a PR number"; exit 1; fi
           # the artifact must belong to the PR whose head commit this run tested
-          pr_head=$(gh api "repos/$GH_REPO/pulls/$pr" --jq .head.sha)
+          read -r pr_head n_files < <(gh api "repos/$GH_REPO/pulls/$pr" --jq '"\(.head.sha) \(.changed_files)"')
           if [ "$pr_head" != "$HEAD_SHA" ]; then echo "PR #$pr head is $pr_head, run tested $HEAD_SHA: skipping (stale run or mismatched artifact)"; exit 0; fi
 
+          # trusted part first: from the event and the GitHub API, never from the artifact
           body="$RUNNER_TEMP/comment.md"
           {
             echo "$marker"
-            head -c 50000 "$REPORT/checklist.md"
+            echo "## Vibe Research PR checks: $CONCLUSION"
             echo
-            echo "### Files outside \`posts/<user>/<slug>/\` (from the GitHub API, not from the PR run)"
+            echo "Run: $RUN_URL"
             echo
-            outside=$(gh api --paginate "repos/$GH_REPO/pulls/$pr/files" --jq '.[] | .filename, (.previous_filename // empty)' | grep -Ev '^posts/[^/]+/[^/]+/.' | head -n 100 || true)
-            if [ -z "$outside" ]; then echo "None."; else echo '~~~~text'; printf '%s\n' "$outside"; echo '~~~~'; fi
+            echo "### Files outside \`posts/<user>/<slug>/\` (from the GitHub API)"
             echo
-            echo "Run: $RUN_URL (conclusion: $CONCLUSION)"
+            if [ "$n_files" -ge 3000 ]; then
+              echo "**Too many files ($n_files): the API lists at most 3000, inspect manually.**"
+            else
+              outside=$(gh api --paginate "repos/$GH_REPO/pulls/$pr/files" --jq '.[] | .filename, (.previous_filename // empty)' | grep -Ev '^posts/[^/]+/[^/]+/.' | head -n 100 || true)
+              if [ -z "$outside" ]; then echo "None."; else echo '~~~~~~~~text'; printf '%s\n' "$outside" | tr -d '~'; echo '~~~~~~~~'; fi
+            fi
+            echo
+            echo '---'
+            echo
+            echo "_Content below was produced by the PR's own CI run and is not trusted._"
+            echo
+            # untrusted checklist, shown verbatim in a fence longer than any backtick run it contains
+            head -c 50000 "$REPORT/checklist.md" > "$RUNNER_TEMP/checklist.txt"
+            longest=$( (grep -o '`\+' "$RUNNER_TEMP/checklist.txt" || true) | awk '{ if (length($0) > m) m = length($0) } END { print m + 0 }')
+            fence=$(printf '%*s' $(( longest < 3 ? 3 : longest + 1 )) '' | tr ' ' '`')
+            echo "${fence}markdown"
+            cat "$RUNNER_TEMP/checklist.txt"
+            echo
+            echo "$fence"
           } > "$body"
 
           id=$(gh api --paginate "repos/$GH_REPO/issues/$pr/comments" \

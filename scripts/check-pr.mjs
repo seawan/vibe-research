@@ -29,7 +29,9 @@ export function runCli(argv, { cwd = process.cwd(), log = console.log } = {}) {
   const o = parseArgs(argv);
   if (!o.base || !o.head || (!o.listPosts && (!o.author || !o.pr))) { console.error(USAGE); return 1; }
   if (!o.listPosts && !/^[1-9]\d{0,9}$/.test(o.pr)) { console.error(`--pr must be a PR number, got "${o.pr}"`); return 1; }
-  const git = (...a) => execFileSync('git', a, { cwd, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+  // folder names are attacker-chosen: pathspecs are always literal
+  const env = { ...process.env, GIT_LITERAL_PATHSPECS: '1' };
+  const git = (...a) => execFileSync('git', a, { cwd, env, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
   const tryGit = (...a) => { try { return git(...a); } catch { return null; } };
   const [base, head] = [o.base, o.head].map((r) => git('rev-parse', '--verify', '--end-of-options', `${r}^{commit}`).trim());
 
@@ -50,7 +52,7 @@ export function runCli(argv, { cwd = process.cwd(), log = console.log } = {}) {
   if (o.listPosts) { for (const id of atHead) log(`posts/${id}`); return 0; }
 
   const authorsAt = (rev, id) => {
-    if (!tryGit('ls-tree', '--name-only', rev, '--', `posts/${id}/`)?.trim()) return null;
+    if (tryGit('cat-file', '-e', `${rev}:posts/${id}`) === null) return null;
     const src = tryGit('show', `${rev}:posts/${id}/index.md`);
     let a = [];
     try { a = src ? matter(src).data.authors : []; } catch {}

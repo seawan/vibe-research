@@ -51,6 +51,23 @@ test('pr-comment: workflow_run on PR checks, minimal permissions, never runs PR 
   assert.ok(r.includes('<!-- vibe-research-report -->'));
   assert.ok(r.includes('--body-file'));
   assert.match(r, /\^\[1-9\]\[0-9\]/, 'PR number validated as an integer');
+  // trusted section (API file list, run conclusion/URL) comes before the untrusted artifact, which is fenced
+  const iTrusted = r.indexOf('pulls/$pr/files');
+  const iNote = r.indexOf('not trusted');
+  const iArtifact = r.indexOf('$REPORT/checklist.md');
+  assert.ok(iTrusted > 0 && r.indexOf('$RUN_URL') < iNote && r.indexOf('$CONCLUSION') < iNote && iTrusted < iNote && iNote < iArtifact);
+  assert.ok(r.indexOf("echo '---'") < iNote);
+  assert.match(r, /longest \+ 1/, 'fence longer than any backtick run in the artifact');
+  assert.match(r, /3000/, 'API file-list cap handled');
+});
+
+test('pr-check: report artifact survives early failures', () => {
+  const wf = load('pr-check.yml');
+  const st = steps(wf);
+  const iFallback = st.findIndex((s) => /pr-report\/pr-number/.test(s.run ?? ''));
+  assert.ok(iFallback >= 0 && iFallback < st.findIndex((s) => s.run === 'npm ci'));
+  assert.equal(st.find((s) => s.id === 'posts')['continue-on-error'], true);
+  for (const s of st.filter((s) => String(s.uses).startsWith('actions/upload-artifact'))) assert.equal(s.if, 'always()');
 });
 
 test('deploy: push to main + dispatch, full history, tests before build', () => {

@@ -63,6 +63,8 @@ Skip this step only if the experiment did not run on Delta; the post is then all
    ```
 
    It creates one sandbox, uploads, runs, pulls `outputs`, writes `run.json` and always kills the sandbox. If it fails or is interrupted, tell the author and check that no sandbox is left running.
+
+   If `sandbox create` fails with "The quota check service rejected the request" even though `delta-cli usage` shows credit, the requested resources are over what the account may take with a GPU. On one account, `cpu: 4, memory: 16Gi` or a named `gpu_type` with `gpu: 1` was refused while `cpu: 2, memory: 8Gi` with no `gpu_type` worked. Lower `cpu`/`memory`, drop `gpu_type`, and try again (the dry run cannot detect this).
 6. Read `run.json` and use the numbers from its `result_summary` in the post.
 
 ## 4. Write the post

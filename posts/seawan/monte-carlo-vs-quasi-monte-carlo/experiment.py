@@ -18,6 +18,7 @@ Outputs:
   error.png     log-log plot of error vs. N
   darts.png     256 random points next to 256 evenly spread points
   race.png      how many times more accurate the evenly spread points are, per N
+  guesses.png   the guess for pi from the first try of each method, next to the real pi
 
 The last line printed is a JSON summary of the headline numbers.
 
@@ -142,6 +143,9 @@ def run_experiment():
             "mc_std": mc_err.std(),
             "rqmc_mean_abs_err": rqmc_err.mean(),
             "rqmc_std": rqmc_err.std(),
+            # the actual guesses from the first of the 50 tries, to compare with the real pi
+            "mc_guess_try1": 4.0 * mc_inside[0, col] / n,
+            "rqmc_guess_try1": 4.0 * rqmc_inside[0, col] / n,
         })
     return rows
 
@@ -165,7 +169,7 @@ def save_csv(rows, path="results.csv"):
         writer = csv.DictWriter(f, fieldnames=rows[0].keys())
         writer.writeheader()
         for row in rows:
-            writer.writerow({k: (f"{v:.6g}" if isinstance(v, float) else v) for k, v in row.items()})
+            writer.writerow({k: (f"{v:.10f}" if "guess" in k else f"{v:.6g}" if isinstance(v, float) else v) for k, v in row.items()})
 
 
 def save_plot(n, mc, rqmc, slope_mc, slope_rqmc, path="error.png"):
@@ -198,6 +202,25 @@ def save_darts_picture(n=256, path="darts.png"):
         ax.plot(np.cos(t), np.sin(t), color="black", lw=1.5)
         ax.set(xlim=(0, 1), ylim=(0, 1), aspect="equal", xticks=[], yticks=[])
         ax.set_title(f"{title}\n{inside.sum()} of {n} inside, so π ≈ {4 * inside.mean():.3f}", fontsize=10)
+    fig.savefig(path, facecolor="white")
+
+
+def save_guesses_chart(rows, path="guesses.png"):
+    """The first try's guess for pi with each method, as darts are added, next to the real pi."""
+    n = np.array([r["n"] for r in rows])
+    fig, ax = plt.subplots(figsize=(6.8, 4.0), dpi=160)
+    ax.axhline(np.pi, color="#111827", lw=1.2, ls="--", label="real π = 3.14159265…")
+    ax.semilogx(n, [r["mc_guess_try1"] for r in rows], "o-", color="#2557a7", ms=4, label="random darts' guess")
+    ax.semilogx(n, [r["rqmc_guess_try1"] for r in rows], "s-", color="#c2410c", ms=4, label="Halton darts' guess")
+    ticks = [t for t in (100, 10_000, 1_000_000, 100_000_000) if t <= n[-1]]
+    ax.set_xticks(ticks, [{100: "100", 10_000: "10 thousand", 1_000_000: "1 million", 100_000_000: "100 million"}[t] for t in ticks])
+    ax.minorticks_off()
+    ax.set_xlabel("number of darts")
+    ax.set_ylabel("guess for π")
+    ax.grid(True, alpha=0.3)
+    ax.legend(frameon=False)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
     fig.savefig(path, facecolor="white")
 
 
@@ -238,6 +261,7 @@ def main():
     save_plot(n, mc, rqmc, slope_mc, slope_rqmc)
     save_darts_picture()
     save_race_chart(rows)
+    save_guesses_chart(rows)
 
     # Final line: machine-readable summary (kept by Delta as result_summary)
     by_n = {r["n"]: r for r in rows}
@@ -254,6 +278,12 @@ def main():
             summary[f"random_error_{label}"] = float(f"{r['mc_mean_abs_err']:.2g}")
             summary[f"halton_error_{label}"] = float(f"{r['rqmc_mean_abs_err']:.2g}")
             summary[f"better_by_{label}"] = round(float(r["mc_mean_abs_err"] / r["rqmc_mean_abs_err"]), 1)
+    # first try's guesses at a few sizes, to set side by side with the real pi
+    summary["pi_true"] = round(float(np.pi), 10)
+    for label, size in (("64", 2**6), ("4k", 2**12), ("262k", 2**18), ("16m", 2**24), ("1b", 2**30)):
+        if size in by_n:
+            summary[f"guess_random_{label}"] = round(float(by_n[size]["mc_guess_try1"]), 10)
+            summary[f"guess_halton_{label}"] = round(float(by_n[size]["rqmc_guess_try1"]), 10)
     print(json.dumps(summary))
 
 

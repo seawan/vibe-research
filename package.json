@@ -1,0 +1,29 @@
+{
+  "name": "vibe-research",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:drafts": "node scripts/build.mjs --drafts",
+    "serve": "node scripts/serve.mjs",
+    "new": "node scripts/new-post.mjs",
+    "check-refs": "node scripts/check-refs.mjs",
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "rerun": "node scripts/vibe-rerun.mjs"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "highlight.js": "^11.10.0",
+    "js-yaml": "^4.1.0",
+    "katex": "^0.16.11",
+    "marked": "^14.1.0",
+    "marked-highlight": "^2.1.4",
+    "marked-katex-extension": "^5.1.2"
+  },
+  "bin": {
+    "vibe-rerun": "scripts/vibe-rerun.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

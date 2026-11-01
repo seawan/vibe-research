@@ -1,0 +1,13 @@
+[
+  {
+    "key": "knuth97",
+    "title": "The Art of Computer Programming, Volume 1",
+    "authors": ["Donald E. Knuth"],
+    "year": 1997,
+    "venue": "Addison-Wesley",
+    "url": "https://www-cs-faculty.stanford.edu/~knuth/taocp.html",
+    "verified": true,
+    "verified_via": "manual",
+    "verified_on": "2026-11-01"
+  }
+]

@@ -29,7 +29,13 @@ tldr:
 
 ## The question
 
-Every circle shares a special number called **pi**, written π. Say it like “pie”. Divide the distance around a circle by the distance straight across its middle, and you get pi.
+First, three words about circles:
+
+- The **circumference** is the distance all the way around a circle, like the length of string you would need to go around a round cake.
+- The **radius** is the distance from the centre of the circle to its edge.
+- The **diameter** is the distance straight across the circle through the centre. It is twice as long as the radius.
+
+Every circle shares a special number called **pi**, written π. Say it like “pie”. Divide a circle’s circumference by its diameter, and you always get pi, about 3.14. That is true for a coin, a bike wheel and a pizza alike: going around a circle is always a bit more than 3 times as far as going across it.
 
 Its digits go on forever. But you can guess its size with a drawing and some dots.
 

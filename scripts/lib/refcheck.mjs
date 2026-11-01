@@ -44,84 +44,53 @@ function lookupApis({ fetchImpl, sleep, retryBase }) {
   const getJSON = (url) => get(url, (r) => r.json());
   const getText = (url) => get(url, (r) => r.text());
 
-async function arxivById(id) {
-  const xml = await getText(`https://export.arxiv.org/api/query?id_list=${encodeURIComponent(id)}`);
-  return xml ? parseArxivEntries(xml)[0] ?? null : null;
-}
-async function arxivByTitle(title) {
-  // arXiv returns nothing if a stopword is among the AND-ed terms
-  const STOP = new Set(['the', 'for', 'and', 'with', 'from', 'into', 'via', 'are', 'its', 'that', 'this', 'over', 'under', 'all', 'you', 'not', 'how', 'what', 'why', 'when', 'can', 'using', 'towards', 'toward', 'about', 'between', 'through', 'without', 'on', 'of', 'in', 'to', 'is', 'an']);
-  const q = norm(title).split(' ').filter((w) => w.length > 2 && !STOP.has(w)).slice(0, 10).map((w) => `ti:${w}`).join(' AND ');
-  const xml = await getText(`https://export.arxiv.org/api/query?search_query=${encodeURIComponent(q)}&max_results=5`);
-  return xml ? parseArxivEntries(xml) : [];
-}
-
-function fromCrossref(m) {
-  const authors = (m.author ?? []).map((a) => (a.given ? `${a.given} ${a.family}` : a.family ?? a.name)).filter(Boolean);
-  const dp = (m['published-print'] ?? m['published-online'] ?? m.issued)?.['date-parts']?.[0];
-  return {
-    title: m.title?.[0],
-    authors,
-    year: dp?.[0],
-    venue: m['container-title']?.[0] || m.publisher,
-    doi: m.DOI,
-    url: m.URL,
-    abstract: m.abstract?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
-    via: 'Crossref',
-  };
-}
-async function crossrefByDoi(doi) {
-  const j = await getJSON(`https://api.crossref.org/works/${encodeURIComponent(doi)}`);
-  return j?.message ? fromCrossref(j.message) : null;
-}
-async function crossrefByTitle(title, author) {
-  const q = new URLSearchParams({ 'query.bibliographic': title, rows: '5' });
-  if (author) q.set('query.author', author);
-  const j = await getJSON(`https://api.crossref.org/works?${q}`);
-  return (j?.message?.items ?? []).map(fromCrossref);
-}
-
-async function s2Search(title) {
-  const fields = 'title,year,authors,venue,externalIds,abstract,url';
-  const j = await getJSON(`https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(title)}&limit=5&fields=${fields}`);
-  return (j?.data ?? []).map((p) => ({
-    title: p.title, authors: (p.authors ?? []).map((a) => a.name), year: p.year, venue: p.venue,
-    doi: p.externalIds?.DOI, arxiv: p.externalIds?.ArXiv, url: p.url, abstract: p.abstract, via: 'Semantic Scholar',
-  }));
-}
-
-// ---------- matching ----------
-function compare(ref, cand) {
-  const titleSim = similarity(ref.title, cand.title);
-  const authorOk = !ref.authors?.length || !cand.authors?.length || cand.authors.slice(0, 3).some((a) => surname(a) === surname(ref.authors[0]));
-  // arXiv preprints often get a later venue year, so allow a small gap
-  const yearOk = !ref.year || !cand.year || Math.abs(Number(ref.year) - Number(cand.year)) <= (cand.via === 'arXiv' || ref.arxiv ? 2 : 1);
-  return { titleSim, authorOk, yearOk, ok: titleSim >= 0.85 && authorOk && yearOk };
-}
-
-async function lookup(ref) {
-  const tried = [];
-  if (ref.arxiv) { const c = await arxivById(ref.arxiv); if (c) tried.push(c); }
-  if (ref.doi) { const c = await crossrefByDoi(ref.doi); if (c) tried.push(c); }
-  // An explicit id that resolves to a different paper is a red flag; report it rather than searching around it.
-  if (tried.length) return tried.map((c) => ({ cand: c, cmp: compare(ref, c), byId: true }));
-  if (!ref.title) return [];
-  const pools = [
-    () => crossrefByTitle(ref.title, ref.authors?.[0] && surname(ref.authors[0])),
-    () => arxivByTitle(ref.title),
-    () => s2Search(ref.title),
-  ];
-  for (const pool of pools) {
-    const cands = (await pool().catch(() => [])).map((c) => ({ cand: c, cmp: compare(ref, c), byId: false }));
-    cands.sort((a, b) => b.cmp.titleSim - a.cmp.titleSim);
-    if (cands[0]?.cmp.ok) return [cands[0]];
-    tried.push(...cands.slice(0, 1));
-    await sleep(300);
+  async function arxivById(id) {
+    const xml = await getText(`https://export.arxiv.org/api/query?id_list=${encodeURIComponent(id)}`);
+    return xml ? parseArxivEntries(xml)[0] ?? null : null;
   }
-  return tried.map((x) => x).filter(Boolean);
-}
+  async function arxivByTitle(title) {
+    // arXiv returns nothing if a stopword is among the AND-ed terms
+    const STOP = new Set(['the', 'for', 'and', 'with', 'from', 'into', 'via', 'are', 'its', 'that', 'this', 'over', 'under', 'all', 'you', 'not', 'how', 'what', 'why', 'when', 'can', 'using', 'towards', 'toward', 'about', 'between', 'through', 'without', 'on', 'of', 'in', 'to', 'is', 'an']);
+    const q = norm(title).split(' ').filter((w) => w.length > 2 && !STOP.has(w)).slice(0, 10).map((w) => `ti:${w}`).join(' AND ');
+    const xml = await getText(`https://export.arxiv.org/api/query?search_query=${encodeURIComponent(q)}&max_results=5`);
+    return xml ? parseArxivEntries(xml) : [];
+  }
 
-  return { arxivById, arxivByTitle, crossrefByDoi, crossrefByTitle, s2Search, getText };
+  function fromCrossref(m) {
+    const authors = (m.author ?? []).map((a) => (a.given ? `${a.given} ${a.family}` : a.family ?? a.name)).filter(Boolean);
+    const dp = (m['published-print'] ?? m['published-online'] ?? m.issued)?.['date-parts']?.[0];
+    return {
+      title: m.title?.[0],
+      authors,
+      year: dp?.[0],
+      venue: m['container-title']?.[0] || m.publisher,
+      doi: m.DOI,
+      url: m.URL,
+      abstract: m.abstract?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+      via: 'Crossref',
+    };
+  }
+  async function crossrefByDoi(doi) {
+    const j = await getJSON(`https://api.crossref.org/works/${encodeURIComponent(doi)}`);
+    return j?.message ? fromCrossref(j.message) : null;
+  }
+  async function crossrefByTitle(title, author) {
+    const q = new URLSearchParams({ 'query.bibliographic': title, rows: '5' });
+    if (author) q.set('query.author', author);
+    const j = await getJSON(`https://api.crossref.org/works?${q}`);
+    return (j?.message?.items ?? []).map(fromCrossref);
+  }
+
+  async function s2Search(title) {
+    const fields = 'title,year,authors,venue,externalIds,abstract,url';
+    const j = await getJSON(`https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(title)}&limit=5&fields=${fields}`);
+    return (j?.data ?? []).map((p) => ({
+      title: p.title, authors: (p.authors ?? []).map((a) => a.name), year: p.year, venue: p.venue,
+      doi: p.externalIds?.DOI, arxiv: p.externalIds?.ArXiv, url: p.url, abstract: p.abstract, via: 'Semantic Scholar',
+    }));
+  }
+
+  return { arxivById, arxivByTitle, crossrefByDoi, crossrefByTitle, s2Search };
 }
 
 // ---------- matching ----------

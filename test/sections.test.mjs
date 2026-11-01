@@ -123,7 +123,7 @@ test('math still renders and citations survive html escaping', () => {
   assert.ok(html.includes('class="katex'));
   assert.ok(html.includes('class="cite"'));
   assert.ok(!/[\uE000\uE001]/.test(html));
-  assert.ok(html.includes('href="#ref-knuth97"'));
+  assert.ok(html.includes('href="#ref-metropolis1949"'));
 });
 
 test('specs inserted before experiment heading', () => {
@@ -153,11 +153,11 @@ test('unsafe link and image schemes render as plain text', () => {
 test('citations are never raw html: link titles, code spans, includes', () => {
   const { html, result } = buildVariant((d) => {
     fs.writeFileSync(path.join(d, 'inc.py'), 'print("0")\n');
-    fs.appendFileSync(path.join(d, 'index.md'), '\n[x](https://example.com "t [@knuth97]")\n\nCode `[@knuth97]` here.\n\n[@knuth97]\n\n@include inc.py\n');
+    fs.appendFileSync(path.join(d, 'index.md'), '\n[x](https://example.com "t [@metropolis1949]")\n\nCode `[@metropolis1949]` here.\n\n[@metropolis1949]\n\n@include inc.py\n');
   });
   assert.deepEqual(result.errors, []);
   assert.ok(!/title="[^"]*<span/.test(html));
-  assert.ok(html.includes('<code>[@knuth97]</code>'));
+  assert.ok(html.includes('<code>[@metropolis1949]</code>'));
   assert.ok(html.includes('<p><span class="cite">'));
   assert.ok(html.includes('class="code-caption"'));
   assert.ok(!/<span class="cite">\[[^\]]*/.test(html));

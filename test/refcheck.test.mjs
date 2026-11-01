@@ -60,3 +60,43 @@ test('arxiv id and title fallback verify; definitive not-found is not a network 
   assert.equal(res.refs[0].verified_via, 'arXiv');
   assert.equal(res.refs[1].verified, true);
 });
+
+// ---- CLI ----
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { runCli } from '../scripts/check-refs.mjs';
+
+function tmpPost(refs) {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-refcli-'));
+  fs.writeFileSync(path.join(d, 'refs.json'), JSON.stringify(refs));
+  return { d, cachePath: path.join(d, 'cache.json') };
+}
+const readJSON = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
+const cli = (d, cachePath, fetchImpl) => runCli([d, '--ci'], { fetchImpl, cachePath, fast: true, log: () => {} });
+
+test('cli --ci resets incoming verified flags and writes status ok + cache', async () => {
+  const { d, cachePath } = tmpPost([{ ...base(), verified: true, verified_via: 'manual' }, { key: 'liar', title: 'Nope', doi: '10.9999/nope', verified: true }]);
+  // the liar fails definitively, so status is failed; check the flags were reset
+  const code = await cli(d, cachePath, stub());
+  const refs = readJSON(path.join(d, 'refs.json'));
+  assert.equal(refs[0].verified_via, 'Crossref');
+  assert.equal(refs[1].verified, false);
+  assert.equal(code, 1);
+  assert.equal(fs.readFileSync(path.join(d, '.refcheck-status'), 'utf8').trim(), 'failed');
+  assert.ok(readJSON(cachePath)['doi:10.5555/3295222']);
+});
+
+test('cli --ci status ok exits 0', async () => {
+  const { d, cachePath } = tmpPost([{ ...base(), verified: false }]);
+  assert.equal(await cli(d, cachePath, stub()), 0);
+  assert.equal(fs.readFileSync(path.join(d, '.refcheck-status'), 'utf8').trim(), 'ok');
+});
+
+test('cli --ci network failure writes retry and exits 0', async () => {
+  const { d, cachePath } = tmpPost([{ ...base(), verified: true }]);
+  const code = await cli(d, cachePath, async () => { throw new Error('offline'); });
+  assert.equal(code, 0);
+  assert.equal(fs.readFileSync(path.join(d, '.refcheck-status'), 'utf8').trim(), 'retry');
+  assert.equal(readJSON(path.join(d, 'refs.json'))[0].verified, false);
+});

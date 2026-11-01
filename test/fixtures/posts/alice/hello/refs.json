@@ -1,13 +1,13 @@
 [
   {
-    "key": "knuth97",
-    "title": "The Art of Computer Programming, Volume 1",
-    "authors": ["Donald E. Knuth"],
-    "year": 1997,
-    "venue": "Addison-Wesley",
-    "url": "https://www-cs-faculty.stanford.edu/~knuth/taocp.html",
+    "key": "metropolis1949",
+    "title": "The Monte Carlo Method",
+    "authors": ["Nicholas Metropolis", "S. Ulam"],
+    "year": 1949,
+    "venue": "Journal of the American Statistical Association",
+    "doi": "10.1080/01621459.1949.10483310",
     "verified": true,
-    "verified_via": "manual",
+    "verified_via": "Crossref",
     "verified_on": "2026-11-01"
   }
 ]

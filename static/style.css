@@ -212,3 +212,27 @@ main.wrap:has(.file-page) { max-width: 980px; }
   .byline { white-space: normal; }
   .site-header nav a { margin-left: 12px; }
 }
+
+/* feed: cards, filters, search, author header */
+.post-item[hidden], .no-results[hidden] { display: none; }
+.post-subtitle { color: var(--muted); margin: 4px 0; font-size: 17px; line-height: 1.45; }
+.card-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ai-chip { font: 600 12px var(--sans); color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 1px 9px; }
+a.tag { text-decoration: none; }
+a.tag:hover { color: var(--fg); border-color: var(--muted); }
+.byline { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; vertical-align: middle; }
+.byline .author { display: inline-flex; align-items: center; gap: 5px; color: var(--fg); text-decoration: none; }
+.avatar { border-radius: 50%; width: 24px; height: 24px; background: var(--line); }
+.badge { font: 600 12px var(--sans); border: 1px solid var(--takeaway); color: var(--takeaway); border-radius: 4px; padding: 0 6px; }
+.filters { margin: 20px 0 0; font-family: var(--sans); }
+.search-box { width: 100%; font: 16px var(--sans); padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); }
+.filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.filter-chip { font: 600 13px var(--sans); background: none; color: var(--fg); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.filter-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.badge-toggle { font-size: 14px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.no-results { color: var(--muted); }
+.author-head { display: flex; align-items: center; gap: 16px; }
+.author-head h1 { margin: 0; }
+.avatar-lg { width: 64px; height: 64px; }
+.hash { color: var(--muted); margin-right: 2px; }
+@media (max-width: 480px) { .intro h1 { font-size: 28px; } .post-link { font-size: 20px; } }

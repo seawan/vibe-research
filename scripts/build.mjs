@@ -11,6 +11,7 @@ import matter from 'gray-matter';
 import { validatePost } from './lib/post-schema.mjs';
 import { parseDeltaSpec, figuresIn, checkFigures, computeBadge, stripDiagram } from './lib/delta-spec.mjs';
 import { aiProcessBox, specsSection, verificationBox, reproduceBox, bylineHtml, updatedHtml, resolveResultMacros, postCommit, esc, safeUrl } from './lib/sections.mjs';
+import { homePage, searchIndex, feedXml, sitePages, siteRoot } from './lib/pages.mjs';
 import { viewerKind, langOf, renderCode, renderCsv, renderNotebook } from './viewers.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -255,26 +256,6 @@ document.querySelector('.copy-btn')?.addEventListener('click', async (e) => {
 </script>`;
 }
 
-function indexPage(posts) {
-  const items = posts.map((p) => `<li class="post-item">
-  <a class="post-link" href="posts/${p.id}/">${p.inline(p.fm.title)}</a>
-  <div class="meta"><time datetime="${isoDate(p.fm.date)}">${fmtDate(p.fm.date)}</time> · ${p.minutes} min read${p.fm.draft ? ' · <span class="draft-badge">DRAFT</span>' : ''}</div>
-  ${p.fm.summary ? `<p>${p.inline(p.fm.summary)}</p>` : ''}
-  <div class="tags">${(p.fm.tags ?? []).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
-</li>`).join('\n');
-  return `<section class="intro"><h1>${esc(site.title)}</h1><p>${esc(site.description)}</p></section>
-<ul class="post-list">${items || '<li>No posts yet.</li>'}</ul>`;
-}
-
-function feed(posts) {
-  const root = site.siteUrl.replace(/\/$/, '') + base;
-  const items = posts.map((p) => `<item><title>${esc(p.fm.title)}</title><link>${root}posts/${p.id}/</link><guid>${root}posts/${p.id}/</guid><pubDate>${new Date(p.fm.date).toUTCString()}</pubDate><description>${esc(p.fm.summary ?? '')}</description></item>`).join('\n');
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0"><channel><title>${esc(site.title)}</title><link>${root}</link><description>${esc(site.description)}</description>
-${items}
-</channel></rss>`;
-}
-
 // ---------- build ----------
 function copyDir(src, dst, filter = () => true) {
   fs.mkdirSync(dst, { recursive: true });
@@ -412,11 +393,17 @@ export function buildSite({ postsDir = path.join(ROOT, 'posts'), outDir = path.j
       fs.writeFileSync(path.join(out, f.rel + '.html'), layout({ title: `${f.rel} · ${p.fm.title}`, description: `${f.rel} from “${p.fm.title}”`, body: filePage(p, f), depth: 2 + f.rel.split('/').length }));
     }
   }
-  fs.writeFileSync(path.join(DIST, 'index.html'), layout({ title: site.title, description: site.description, body: indexPage(posts) }));
+  fs.writeFileSync(path.join(DIST, 'index.html'), layout({ title: site.title, description: site.description, body: homePage(posts) }));
   const aboutPath = path.join(ROOT, 'about.md');
   const about = fs.existsSync(aboutPath) ? makeMarked([]).parse(matter(fs.readFileSync(aboutPath, 'utf8')).content) : '<p>About this blog.</p>';
   fs.writeFileSync(path.join(DIST, 'about.html'), layout({ title: `About · ${site.title}`, description: site.description, body: `<article class="post"><div class="post-body">${about}</div></article>` }));
-  fs.writeFileSync(path.join(DIST, 'feed.xml'), feed(posts));
+  fs.writeFileSync(path.join(DIST, 'feed.xml'), feedXml({ title: site.title, link: siteRoot, posts }));
+  fs.writeFileSync(path.join(DIST, 'search.json'), JSON.stringify(searchIndex(posts)));
+  for (const pg of sitePages(posts)) {
+    const f = path.join(DIST, pg.file);
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, pg.raw ?? layout({ title: pg.title, description: site.description, body: pg.body, depth: pg.depth, url: pg.url }));
+  }
   fs.writeFileSync(path.join(DIST, '.nojekyll'), '');
 
   return { posts, errors, warnings };

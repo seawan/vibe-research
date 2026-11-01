@@ -1,0 +1,62 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { checkRefs } from '../scripts/lib/refcheck.mjs';
+
+const resp = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body, text: async () => (typeof body === 'string' ? body : JSON.stringify(body)) });
+const CROSSREF = { message: { title: ['Attention Is All You Need'], author: [{ given: 'Ashish', family: 'Vaswani' }], issued: { 'date-parts': [[2017]] }, 'container-title': ['NeurIPS'], DOI: '10.5555/3295222', URL: 'https://doi.org/10.5555/3295222', abstract: '<p>Transformers.</p>' } };
+const ARXIV = `<feed><entry><id>http://arxiv.org/abs/1706.03762v7</id><published>2017-06-12T00:00:00Z</published><title>Attention Is All You Need</title><summary>We propose the Transformer.</summary><author><name>Ashish Vaswani</name></author></entry></feed>`;
+const stub = (log = []) => async (url) => {
+  log.push(String(url));
+  if (url.includes('api.crossref.org/works/10.5555')) return resp(200, CROSSREF);
+  if (url.includes('api.crossref.org/works/')) return resp(404, {});
+  if (url.includes('export.arxiv.org')) return resp(200, ARXIV);
+  return resp(200, { data: [] });
+};
+const base = () => ({ key: 'vas17', title: 'Attention Is All You Need', authors: ['Ashish Vaswani'], year: 2017, doi: '10.5555/3295222' });
+const opts = (o = {}) => ({ today: '2026-11-01', fast: true, ...o });
+
+test('verifies doi reference', async () => {
+  const res = await checkRefs([base()], opts({ fetchImpl: stub() }));
+  assert.equal(res.networkFailed, false);
+  assert.deepEqual(res.unverified, []);
+  const r = res.refs[0];
+  assert.equal(r.verified, true); assert.equal(r.verified_via, 'Crossref'); assert.equal(r.verified_on, '2026-11-01');
+  assert.equal(res.abstracts.vas17.abstract, 'Transformers.');
+  assert.equal(res.cache['doi:10.5555/3295222'].verified_via, 'Crossref');
+});
+
+test('ci mode resets incoming verified flags', async () => {
+  const fake = { key: 'fake', title: 'A Paper That Does Not Exist', authors: ['Nobody'], year: 2020, doi: '10.9999/nope', verified: true, verified_via: 'manual', verified_on: '2020-01-01' };
+  const res = await checkRefs([fake], opts({ fetchImpl: stub() }));
+  assert.equal(res.refs[0].verified, false);
+  assert.equal(res.refs[0].verified_via, undefined);
+  assert.deepEqual(res.unverified, ['fake']);
+  assert.equal(res.networkFailed, false);
+});
+
+test('uses cache without network', async () => {
+  const first = await checkRefs([base()], opts({ fetchImpl: stub() }));
+  const boom = async () => { throw new Error('offline'); };
+  const res = await checkRefs([{ ...base(), verified: false }], opts({ fetchImpl: boom, cache: first.cache }));
+  assert.equal(res.networkFailed, false);
+  assert.equal(res.refs[0].verified, true);
+  assert.equal(res.refs[0].verified_via, 'Crossref');
+  assert.deepEqual(Object.keys(res.cache), [...Object.keys(res.cache)].sort());
+});
+
+test('network failure reports retry', async () => {
+  const boom = async () => { throw new Error('offline'); };
+  const res = await checkRefs([{ ...base(), verified: true }], opts({ fetchImpl: boom }));
+  assert.equal(res.networkFailed, true);
+  assert.equal(res.refs[0].verified, false);
+  const r5xx = await checkRefs([base()], opts({ fetchImpl: async () => resp(503, {}) }));
+  assert.equal(r5xx.networkFailed, true);
+  assert.equal(r5xx.refs[0].verified, false);
+});
+
+test('arxiv id and title fallback verify; definitive not-found is not a network failure', async () => {
+  const res = await checkRefs([{ key: 'a', title: 'Attention is all you need', authors: ['Vaswani, A.'], year: 2017, arxiv: '1706.03762' }, { key: 'b', title: 'Attention Is All You Need', authors: ['Ashish Vaswani'], year: 2017 }], opts({ fetchImpl: stub() }));
+  assert.equal(res.networkFailed, false);
+  assert.equal(res.refs[0].verified_via, 'arXiv');
+  assert.equal(res.refs[1].verified, true);
+});

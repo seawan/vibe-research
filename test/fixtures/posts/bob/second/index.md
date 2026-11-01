@@ -1,7 +1,7 @@
 ---
 title: "Estimating pi with Monte Carlo"
 subtitle: "A tiny co-authored experiment"
-date: 2026-10-20
+date: 2026-11-02
 authors: [bob, alice]
 ai:
   - name: ChatGPT

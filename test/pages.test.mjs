@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildSite } from '../scripts/build.mjs';
-import { postCard, searchIndex, tagSlug } from '../scripts/lib/pages.mjs';
+import { postCard, searchIndex, feedXml, tagSlug } from '../scripts/lib/pages.mjs';
 import { buildFixture } from './helpers.mjs';
 
 const read = (dir, f) => fs.readFileSync(path.join(dir, f), 'utf8');
@@ -16,7 +16,12 @@ test('home lists posts newest first', () => {
   const { outDir, result } = buildFixture();
   assert.deepEqual(result.errors, []);
   const home = read(outDir, 'index.html');
-  assert.ok(home.indexOf('data-id="alice/hello"') < home.indexOf('data-id="bob/second"'));
+  // bob/second is newer than alice/hello but sorts after it alphabetically
+  assert.ok(home.indexOf('data-id="bob/second"') < home.indexOf('data-id="alice/hello"'));
+  const posts = [...result.posts].reverse(); // oldest first: builders must re-sort
+  assert.deepEqual(searchIndex(posts).map((e) => e.id), ['bob/second', 'alice/hello']);
+  const ids = [...feedXml({ title: 't', link: 'l', posts }).matchAll(/posts\/([^<]+)\/<\/link>/g)].map((m) => m[1]);
+  assert.deepEqual(ids, ['bob/second', 'alice/hello']);
   assert.match(home, /class="search-box"/);
   assert.match(home, /assets\/site\.js/);
 });
@@ -82,4 +87,26 @@ test('drafts excluded from home, tags, authors, search and feeds', () => {
   assert.ok(!fs.existsSync(path.join(out, '@bob')));
   assert.equal(searchIndex(r.posts).length, 1);
   assert.doesNotMatch(postCard(r.posts[0], ''), /DRAFT/);
+});
+
+test('special characters are escaped once in HTML and RSS, literal in search.json', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-esc-'));
+  fs.cpSync(SRC, root, { recursive: true });
+  const f = path.join(root, 'bob/second/index.md');
+  fs.writeFileSync(f, fs.readFileSync(f, 'utf8')
+    .replace('title: "Estimating pi with Monte Carlo"', 'title: "A & B: List<T> and \\"quotes\\""')
+    .replace('tags: ["monte carlo", "sampling"]', 'tags: ["monte carlo", "R&D <x>"]'));
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-esc-out-'));
+  const r = buildSite({ postsDir: root, outDir: out });
+  assert.deepEqual(r.errors, []);
+  const card = cardOf(read(out, 'index.html'), 'bob/second');
+  assert.match(card, /A &amp; B: List&lt;T&gt; and (&quot;|&#34;)quotes/);
+  assert.doesNotMatch(card, /&amp;amp;|&amp;lt;/);
+  assert.match(card, /R&amp;D &lt;x&gt;/);
+  const e = JSON.parse(read(out, 'search.json')).find((x) => x.id === 'bob/second');
+  assert.equal(e.title, 'A & B: List<T> and "quotes"');
+  assert.deepEqual(e.tags, ['monte carlo', 'R&D <x>']);
+  const rss = read(out, 'feed.xml');
+  assert.match(rss, /<title>A &amp; B: List&lt;T&gt; and &quot;quotes&quot;<\/title>/);
+  assert.doesNotMatch(rss, /&amp;amp;|&amp;lt;/);
 });

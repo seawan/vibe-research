@@ -112,7 +112,7 @@ test('include-expanded content is what gets scanned (images in included code are
   fs.appendFileSync(path.join(d, 'index.md'), '\n@include snippet.md\n');
   const r = buildSite({ postsDir: root, outDir: fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-out-')) });
   assert.deepEqual(r.errors, []);
-  assert.equal(r.posts[0].delta.badge, true);
+  assert.equal(r.posts.find((p) => p.id === 'alice/hello').delta.badge, true);
 });
 test('fixture post earns the badge in a build; bad figure fails it', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-fx-'));
@@ -120,7 +120,7 @@ test('fixture post earns the badge in a build; bad figure fails it', () => {
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-out-'));
   let r = buildSite({ postsDir: root, outDir });
   assert.deepEqual(r.errors, []);
-  assert.equal(r.posts[0].delta.badge, true);
+  assert.equal(r.posts.find((p) => p.id === 'alice/hello').delta.badge, true);
   fs.appendFileSync(path.join(root, 'alice/hello/index.md'), '\n![plot](plot.png "A plot")\n\n![d](flow.svg "The flow {diagram}")\n');
   r = buildSite({ postsDir: root, outDir });
   has(r.errors, 'plot.png');

@@ -9,7 +9,8 @@ export const siteRoot = site.siteUrl.replace(/\/$/, '') + (site.baseUrl.endsWith
 
 const fmtDate = (d) => new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 const isoDate = (d) => new Date(d).toISOString().slice(0, 10);
-const strip = (s) => String(s ?? '').replace(/<[^>]+>/g, '');
+// plain text for search.json / RSS: the raw front-matter string (escaped once at the point of use)
+const plain = (s) => String(s ?? '');
 const aiToken = (n) => String(n).toLowerCase().trim().replace(/\s+/g, '-');
 
 // "monte carlo" -> "monte-carlo"; empty result means the tag has no page
@@ -76,9 +77,9 @@ ${script('../')}`;
 export function searchIndex(posts) {
   return newestFirst(listed(posts)).map((p) => ({
     id: p.id,
-    title: strip(p.inline(p.fm.title)),
-    subtitle: strip(p.inline(p.fm.subtitle ?? '')),
-    summary: strip(p.inline(p.fm.summary ?? '')),
+    title: plain(p.fm.title),
+    subtitle: plain(p.fm.subtitle),
+    summary: plain(p.fm.summary),
     tags: p.fm.tags ?? [],
     authors: p.fm.authors ?? [],
     ai: (p.fm.ai ?? []).map((a) => a.name),
@@ -90,7 +91,7 @@ export function searchIndex(posts) {
 export function feedXml({ title, link, posts, description = site.description }) {
   const items = newestFirst(listed(posts)).map((p) => {
     const u = `${siteRoot}posts/${p.id}/`;
-    return `<item><title>${esc(strip(p.inline(p.fm.title)))}</title><link>${u}</link><guid>${u}</guid><pubDate>${new Date(p.fm.date).toUTCString()}</pubDate><description>${esc(strip(p.inline(p.fm.summary ?? '')))}</description></item>`;
+    return `<item><title>${esc(plain(p.fm.title))}</title><link>${esc(u)}</link><guid>${esc(u)}</guid><pubDate>${new Date(p.fm.date).toUTCString()}</pubDate><description>${esc(plain(p.fm.summary))}</description></item>`;
   }).join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel><title>${esc(title)}</title><link>${esc(link)}</link><description>${esc(description)}</description>

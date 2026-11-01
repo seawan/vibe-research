@@ -11,9 +11,9 @@ test('builds nested user/slug posts', () => {
   const { outDir, result } = buildFixture();
   assert.deepEqual(result.errors, []);
   assert.ok(fs.existsSync(path.join(outDir, 'posts/alice/hello/index.html')));
-  assert.equal(result.posts[0].id, 'alice/hello');
-  assert.equal(result.posts[0].user, 'alice');
-  assert.equal(result.posts[0].slug, 'hello');
+  const a = result.posts.find((p) => p.id === 'alice/hello');
+  assert.equal(a.user, 'alice');
+  assert.equal(a.slug, 'hello');
 });
 
 test('schema violations are build errors, or warnings for drafts', () => {

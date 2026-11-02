@@ -5,7 +5,6 @@ date: 2026-11-01
 summary: "Can a computer get better at guessing the next letter in a book? Our tiny storyteller went from jumbled letters to writing that sounds like a fairy tale. But its stories still don't quite make sense."
 tags: [AI, fairy tales, guessing games, for young readers]
 code: "experiment.py"
-draft: true
 authors: [seawan]
 ai:
   - name: "Claude"
@@ -14,15 +13,14 @@ ai:
   - name: "ChatGPT (Codex CLI)"
     model: "gpt-6.1-sol"
     role: "rewrote the post for young readers"
-contribution: ""  # TO FILL IN BY THE AUTHOR, in your own words: what you did and what the AI did
+contribution: "This is an AI vibe paper, made for children who are learning about AI. I asked for kid-friendly research posts and chose which topics to do. Claude wrote the code, ran the experiment in a Delta cloud sandbox and made the pictures. ChatGPT (Codex CLI) rewrote the text for young readers."
 license: CC-BY-4.0
 code_license: MIT
-# Only the author fills this in, after checking the results personally.
 author_verification:
-  verified: false
-  by: ""
-  date: ""
-  checked: ""
+  verified: true
+  by: seawan
+  date: 2026-11-02
+  checked: "I read the whole post and looked at every picture to make sure a child can follow it. I checked that the story samples and the numbers in the table match the results files from the Delta run, and that the post has the Delta-reproducible badge and run record."
 tldr:
   - "Our tiny storyteller plays a game: guess the next letter."
   - "After practice, its guesses improved and its writing sounded more like fairy tales."

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "execution_id": "e3c5aa15076d4c05b8e04bbdf518d3df",
+  "execution_id": "e4141a8b85334853a189049fbd217b7b",
   "sandbox": {
     "image": "PyTorch CUDA13 (GPU)",
     "cpu": 2,
@@ -10,9 +10,9 @@
     "gpu_type": null,
     "deployment": "domestic"
   },
-  "started_at": "2026-11-02T07:21:12.708Z",
-  "finished_at": "2026-11-02T07:23:26.180Z",
-  "duration_s": 133,
+  "started_at": "2026-11-02T10:07:13.087Z",
+  "finished_at": "2026-11-02T10:12:09.549Z",
+  "duration_s": 296,
   "exit_code": 0,
   "delta_cli_version": "v1.1.53",
   "packages": [
@@ -54,8 +54,8 @@
     "tzdata==2026.6"
   ],
   "result_summary": {
-    "device": "NVIDIA H100 80GB HBM3",
-    "seconds": 119.1,
+    "device": "NVIDIA A100-SXM4-80GB",
+    "seconds": 265.7,
     "parameters": 1835601,
     "alphabet_size": 81,
     "training_letters": 468736,
@@ -63,6 +63,9 @@
     "torn_between_start": 93.2,
     "torn_between_end": 3.77,
     "test_loss_end": 1.327,
-    "train_loss_end": 1.078
+    "train_loss_end": 1.078,
+    "first_guess_right_start_pct": 1.1,
+    "first_guess_right_end_pct": 59.8,
+    "torn_between_train_end": 2.94
   }
 }

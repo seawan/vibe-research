@@ -1,0 +1,29 @@
+[
+  {
+    "key": "shannon1951",
+    "title": "Prediction and Entropy of Printed English",
+    "authors": [
+      "C. E. Shannon"
+    ],
+    "year": 1951,
+    "doi": "10.1002/j.1538-7305.1951.tb01366.x",
+    "claim": "Measures how predictable English text is by having people guess the next letter, one letter at a time.",
+    "verified": true,
+    "verified_via": "Crossref",
+    "verified_on": "2026-11-01",
+    "venue": "Bell System Technical Journal"
+  },
+  {
+    "key": "vaswani2017",
+    "title": "Attention Is All You Need",
+    "authors": [
+      "Ashish Vaswani"
+    ],
+    "year": 2017,
+    "arxiv": "1706.03762",
+    "claim": "Introduces the transformer, the attention-based model design that our tiny storyteller (and today's chatbots) uses.",
+    "verified": true,
+    "verified_via": "arXiv",
+    "verified_on": "2026-11-01"
+  }
+]

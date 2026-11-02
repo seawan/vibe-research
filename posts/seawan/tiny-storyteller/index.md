@@ -5,7 +5,6 @@ date: 2026-11-01
 summary: "We built a tiny version of the kind of AI behind chatbots and let it practise one guessing game: what is the next letter? After practice, its first guess was right about 60 times in 100 on pages it had never seen, and its writing went from jumbled symbols to fairy-tale-sounding sentences that still don't make sense."
 tags: [AI, language models, fairy tales, guessing games, for young readers]
 code: "experiment.py"
-draft: true
 authors: [seawan]
 ai:
   - name: "Claude"

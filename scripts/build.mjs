@@ -8,7 +8,7 @@ import markedKatex from 'marked-katex-extension';
 import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js';
 import matter from 'gray-matter';
-import { validatePost } from './lib/post-schema.mjs';
+import { validatePost, INTERACTIVE_RE } from './lib/post-schema.mjs';
 import { parseDeltaSpec, figuresIn, checkFigures, computeBadge, stripDiagram } from './lib/delta-spec.mjs';
 import { aiProcessBox, specsSection, verificationBox, reproduceBox, bylineHtml, updatedHtml, resolveResultMacros, postCommit, esc, safeUrl } from './lib/sections.mjs';
 import { homePage, searchIndex, feedXml, sitePages, siteRoot } from './lib/pages.mjs';
@@ -19,7 +19,7 @@ const site = JSON.parse(fs.readFileSync(path.join(ROOT, 'site.config.json'), 'ut
 const base = site.baseUrl.endsWith('/') ? site.baseUrl : site.baseUrl + '/';
 
 // per-build state, reset by buildSite()
-let POSTS, INCLUDE_DRAFTS, ALLOW_UNVERIFIED, COMMIT_INFO;
+let POSTS, INCLUDE_DRAFTS, ALLOW_UNVERIFIED, COMMIT_INFO, INTERACTIVE;
 let errors = [];
 let warnings = [];
 
@@ -173,6 +173,9 @@ function postPage(post) {
   const tldr = fm.tldr?.length
     ? `<aside class="tldr"><div class="callout-label">TL;DR</div><ul>${fm.tldr.map((x) => `<li>${post.inline(x)}</li>`).join('')}</ul></aside>`
     : '';
+  const interactive = fm.interactive
+    ? `<p class="interactive-cta"><a href="../../../interactive/${esc(fm.interactive)}.html">Open the interactive version</a> <span>live charts and hands-on widgets, written by the site owner</span></p>`
+    : '';
   const { delta } = post;
   // Specs go right before the experiment H2 (or before the first H2 if there is none)
   const specs = specsSection({ spec: delta.spec, run: delta.run, fm });
@@ -206,6 +209,7 @@ function postPage(post) {
   <p class="meta">${meta}</p>
   <div class="tags">${tags}</div>
 </header>
+${interactive}
 ${tldr}
 ${aiProcessBox(fm, post.chatFiles)}
 ${toc}
@@ -317,6 +321,14 @@ function loadPost(id) {
   if (Array.isArray(fm.ai) && fm.ai.some((a) => !a || typeof a !== 'object')) { errors.push(`${id}: ai: every entry must be a { name, model, role } map`); fm.ai = fm.ai.filter((a) => a && typeof a === 'object'); }
   if (fm.date && isNaN(new Date(fm.date))) { errors.push(`${id}: date: not a valid date`); fm.date = new Date(0); }
   if (!fm.date) fm.date = new Date(0); // already reported as missing; keeps rendering from crashing
+  // optional interactive companion: a site-owner page interactive/<name>.html (bad names are reported by the schema)
+  if (fm.interactive != null) {
+    if (typeof fm.interactive !== 'string' || !INTERACTIVE_RE.test(fm.interactive)) fm.interactive = null;
+    else if (!fs.existsSync(path.join(INTERACTIVE, fm.interactive + '.html'))) {
+      (fm.draft ? warnings : errors).push(`${id}: interactive: interactive/${fm.interactive}.html does not exist`);
+      fm.interactive = null;
+    }
+  }
   // delta.yaml + run.json, figure provenance: errors, or warnings for drafts
   const report = (m) => (fm.draft ? warnings : errors).push(`${id}: ${m}`);
   let spec = null, run = null, specOk = false;
@@ -390,8 +402,8 @@ function loadPost(id) {
 }
 
 // Build every post under postsDir/<user>/<slug>/ into outDir. Never exits; returns { posts, errors, warnings }.
-export function buildSite({ postsDir = path.join(ROOT, 'posts'), outDir = path.join(ROOT, 'dist'), drafts = false, allowUnverified = false, commitInfo = postCommit } = {}) {
-  POSTS = postsDir; INCLUDE_DRAFTS = drafts; ALLOW_UNVERIFIED = allowUnverified; COMMIT_INFO = commitInfo;
+export function buildSite({ postsDir = path.join(ROOT, 'posts'), outDir = path.join(ROOT, 'dist'), drafts = false, allowUnverified = false, commitInfo = postCommit, interactiveDir = path.join(ROOT, 'interactive') } = {}) {
+  POSTS = postsDir; INCLUDE_DRAFTS = drafts; ALLOW_UNVERIFIED = allowUnverified; COMMIT_INFO = commitInfo; INTERACTIVE = interactiveDir;
   errors = []; warnings = [];
   const DIST = outDir;
   fs.rmSync(DIST, { recursive: true, force: true });
@@ -400,6 +412,8 @@ export function buildSite({ postsDir = path.join(ROOT, 'posts'), outDir = path.j
   fs.copyFileSync(path.join(ROOT, 'node_modules/highlight.js/styles/github.min.css'), path.join(DIST, 'assets/hljs-light.css'));
   fs.copyFileSync(path.join(ROOT, 'node_modules/highlight.js/styles/github-dark.min.css'), path.join(DIST, 'assets/hljs-dark.css'));
   copyDir(path.join(ROOT, 'static'), path.join(DIST, 'assets'));
+  // site-owner interactive pages are served as-is; PR policy keeps contributors out of interactive/
+  if (fs.existsSync(INTERACTIVE)) copyDir(INTERACTIVE, path.join(DIST, 'interactive'), (n) => !n.startsWith('.'));
 
   const subdirs = (d) => (fs.existsSync(d) ? fs.readdirSync(d, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.name.startsWith('.')).map((e) => e.name).sort() : []);
   const ids = subdirs(POSTS).flatMap((u) => subdirs(path.join(POSTS, u)).filter((s) => fs.existsSync(path.join(POSTS, u, s, 'index.md'))).map((s) => `${u}/${s}`));

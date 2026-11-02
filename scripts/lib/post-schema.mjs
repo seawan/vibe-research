@@ -9,6 +9,7 @@ export const BOILERPLATE_CHECKS = ['verified', 'i verified the results', 'i chec
 const DATA_EXTS = ['.json', '.yaml', '.yml', '.txt', '.log', '.csv', '.tsv', '.md'];
 const USER_RE = /^[a-z\d](?:[a-z\d-]{0,38})$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+export const INTERACTIVE_RE = /^[a-z\d][a-z\d-]{0,63}$/;
 const isStr = (s) => typeof s === 'string' && s.trim() !== '';
 // gray-matter parses bare YAML dates into Date objects
 const dayOf = (d) => (d instanceof Date ? (isNaN(d) ? '' : d.toISOString().slice(0, 10)) : String(d ?? ''));
@@ -81,5 +82,7 @@ export function validatePost({ fm = {}, markdown = '', folderUser, files = [] })
   if (links !== undefined && !(Array.isArray(links) && links.every((u) => typeof u === 'string' && /^https:\/\/\S+$/.test(u)))) e.push('chat_links: must be a list of https URLs');
   const hasLinks = Array.isArray(links) && links.length > 0;
   if (!hasLinks && !files.some((f) => /^chat\/[^/]+\.md$/i.test(f))) e.push('chat: add a chat/*.md excerpt or a non-empty chat_links list');
+  // name of a site-owner page in interactive/<name>.html; the build checks that it exists
+  if (fm.interactive !== undefined && !(typeof fm.interactive === 'string' && INTERACTIVE_RE.test(fm.interactive))) e.push('interactive: must be the name of a page in interactive/ (lowercase letters, digits and dashes, without .html)');
   return e;
 }

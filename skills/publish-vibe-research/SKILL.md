@@ -1,191 +1,132 @@
 ---
 name: publish-vibe-research
-description: Turn vibe-research results (experiments, notebooks, notes, figures) into a plain-language, paper-style Vibe Research post with real experiment results, machine-verified references, an honest AI-and-process record, and an optional Delta rerun package, then preview it and open a pull request to seawan/vibe-research. Use when asked to "publish this research", "write this up as a post", "submit to Vibe Research", "make this reproducible on Delta", or "/publish-vibe-research".
+description: Write and publish a Vibe Research post (seawan/vibe-research), either from an idea or from existing results. Designs and runs the experiment on Delta, makes pictures and animations from the real outputs, writes a plain-language or kid-friendly post, verifies references, previews it, and opens a pull request. Use when asked to "write a Vibe Research post", "publish this research", "write this up as a post", "make this reproducible on Delta", or "/publish-vibe-research".
 ---
 
-# Publish research to Vibe Research
+# Publish a Vibe Research post
 
-Vibe Research is a static site (repo `seawan/vibe-research`). A post is one folder, `posts/<github-login>/<slug>/`, added by pull request. CI builds it in strict mode, so references must be verified, math must render, required sections must exist, and figures must be run outputs.
+A post is one folder, `posts/<github-login>/<slug>/`, added by pull request to `seawan/vibe-research`. CI builds it strictly: references must be verified, math must render, required sections must exist, and every figure must be a real run output. The full rules are in the repo's `CONTRIBUTING.md`; this skill is the working recipe.
 
-Paths below are relative to the repo root (called the repo). If the current directory is not inside a clone of `seawan/vibe-research`, stop and tell the user to fork and clone it first (`gh repo fork seawan/vibe-research --clone`, then `cd vibe-research && npm ci`), then continue from there. Read `CONTRIBUTING.md` in the repo if you need the exact rules.
+Work from a clone of the repo. If the current folder is not one, tell the user to run `gh repo fork seawan/vibe-research --clone` (the owner clones directly), then `npm ci`, and continue there.
 
-Work through the steps in order. Never put a number in the post that you cannot trace to a file or a run.
+## Hard rules
 
-## Hard rules (never break these)
+1. **Every number traces to a file.** Never write a number you cannot point to in a run output.
+2. **Ask before each Delta run.** It uses the author's quota. Name the image, GPU and time limit, and wait for a yes. Always kill the sandbox afterwards, also on error.
+3. **The author writes their own sign-off.** `contribution` and `author_verification.checked` are the author's words. If they ask for help, offer a draft and let them accept or rewrite it; never fill these in silently, and never set `verified: true` before they confirm.
+4. **List only the AI tools actually used** in `ai:`, with what each did (for example Claude for code and text, ChatGPT/Codex for a rewrite).
+5. **Ask before pushing or opening the pull request.**
 
-1. **Ask before creating a Delta sandbox.** A sandbox uses the author's own Delta quota. Say what will run (image, GPU, time limit from `delta.yaml`) and wait for a yes before `npm run rerun -- <dir> --record`. `npm run rerun -- <dir> --record --dry-run` is free and needs no approval (plain `--dry-run` is only for checking an already recorded post).
-2. **Ask before opening the pull request.** Show the preview and a summary first. Also ask before any `git push`.
-3. **Never write `contribution` or `author_verification.checked` yourself.** Ask the author, and paste their words (light typo fixes only). Never set `author_verification.verified: true`, `by` or `date` before they have given their words.
-4. **Never invent `ai` entries.** List only the tools and models the author says they used, with the role they describe. Ask for the exact model name if you are not sure.
+## 1. Agree on the post
 
-## 1. Gather the research
+Find out, in one short round of questions (skip what is already clear):
 
-- Find the results: ask which folder, notebook or run if it is not obvious from the conversation or current directory.
-- Read the actual code, logs and result files. Note for every headline number **which file it came from**.
-- If results are missing (no seeds, no baseline, no error bars) and the experiment is cheap, re-run it and save outputs. If not cheap, say so in the post's limitations instead of inventing anything.
-- Ask the user only for things you cannot determine: the title angle, and anything ambiguous about the claims. Keep it to one round of questions.
+- **Start point:** an idea (you design the experiment) or existing results (read them first; note which file each headline number comes from).
+- **Reader:** an adult outside the field, or children (about age 12). This sets the writing style in step 4.
+- **Pictures:** how many, and whether animations are wanted. When in doubt, more pictures.
 
-## 2. Scaffold the post
+## 2. Set up the folder and the code
 
 ```bash
 npm run new -- "Post title"
 ```
 
-This creates `posts/<your-github-login>/<slug>/index.md` (from `templates/post.md`, with `authors`, `license: CC-BY-4.0`, `code_license: MIT`, an empty `ai: []`, an unsigned `author_verification` and `draft: true`) and an empty `refs.json`. The login comes from `gh api user`; if `gh` is not logged in, ask the user for their GitHub login and run `npm run new -- --user <login> "Post title"`. It refuses to overwrite an existing folder.
+This makes `posts/<login>/<slug>/` with `index.md` (a draft) and an empty `refs.json`. If `gh` is not logged in, add `--user <login>`.
 
-Copy into the post folder: the code you actually ran (at least one code file), data files, and figures. Set `code:` in the front matter to the script or repo URL. Keep every file under 5 MB (25 MB per post); link bigger data and fetch it in `setup` of `delta.yaml`. Allowed types are listed in `CONTRIBUTING.md`.
+Write the code so a reader can open it in the browser and follow it:
 
-Make the code readable. Readers open it in the browser, so clean it before shipping (without changing behaviour):
+- `experiment.py` runs the experiment. Settings are named constants at the top, with small, plainly named functions. Its **last stdout line is one JSON object** of headline numbers; this becomes `result_summary`, read in the post as `{{result.key}}`.
+- `pictures.py` (separate) draws every picture from the saved outputs (CSV/JSON), so pictures can be redrawn without retraining.
+- Save small probe files (for example `probes.json`) holding exactly the examples the pictures and text show, so every example in the post is real.
+- If something is random, use the real thing in pictures (the real first batch, the real model guesses), not a separate random draw that only looks similar.
 
-- A top docstring saying what the script does, what it writes, and how to run it.
-- Settings as named constants at the top (`NUM_SEEDS = 50`, not a bare `50` deep in a loop).
-- Small functions with plain names (`estimate_pi`, `random_shift`), each with a one-to-three-line docstring explaining *what* and *why*, plus a worked example where it helps.
-- Section comments (`# Settings`, `# Experiment`, `# Output`) and short comments on non-obvious lines only.
-- No dead code, commented-out experiments, or hard-coded personal paths.
-- **After refactoring, re-run the script and confirm the outputs are identical** (e.g. `diff` the results file against the old one). If they differ, find out why before going on.
+## 3. Run it on Delta
 
-For a notebook, ship the `.ipynb` with outputs saved; strip huge outputs first.
+Write `delta.yaml` (see existing posts in `posts/seawan/*/delta.yaml`):
 
-Make figures readable: label axes with units, add a legend, use `dpi>=150`, keep the background white. **Save figures as PNG.** SVGs are checked against a strict allowlist and matplotlib SVGs (which contain `<style>` and `<metadata>`) are rejected.
+```yaml
+version: 1
+deployment: domestic
+sandbox: { image: "PyTorch CUDA13 (GPU)", cpu: 2, memory: 8Gi, gpu: 1, gpu_mem: 8000, max_life: 60 }
+upload: "."
+setup: "pip install matplotlib"
+command: "python experiment.py && python pictures.py"
+timeout: 2400
+outputs: [results.csv, probes.json, learning.png, odds.gif]   # every file the post shows
+```
 
-## 3. Record the run: `delta.yaml` (optional, earns the badge)
-
-Skip this step only if the experiment did not run on Delta; the post is then allowed but has no Delta-reproducible badge, and its specs are marked self-reported.
-
-1. Write `delta.yaml` in the post folder **from the sandbox the author actually used** (image name, CPU, memory, GPU, GPU memory and type, `max_life`, `timeout`). Ask the author for these if you do not have them; never guess an image or GPU. The format is in the repo's design spec (section 6.2): `version`, `deployment`, `sandbox`, `upload`, `setup`, `command`, `timeout`, `outputs`, `expected`.
-2. Make the script **print its final JSON summary** as the last line of stdout (for example `{"qmc_error_262k": 1.1e-4, "slope": -0.79}`). The run record keeps it as `result_summary`, and the post's `{{result.key}}` macros read from it.
-3. List every file the run produces in `outputs` (the figures and result files you will show in the post).
-4. Validate for free, before the first recording: `npm run rerun -- posts/<user>/<slug> --record --dry-run` (plain `--dry-run` needs published outputs, so it only works on an already recorded post). Fix everything it reports.
-5. **Ask the author for approval**, naming the image/GPU/time limit, because this creates a Delta sandbox on their quota. Only after a yes:
-
-   ```bash
-   npm run rerun -- posts/<user>/<slug> --record
-   ```
-
-   It creates one sandbox, uploads, runs, pulls `outputs`, writes `run.json` and always kills the sandbox. If it fails or is interrupted, tell the author and check that no sandbox is left running.
-
-   If `sandbox create` fails with "The quota check service rejected the request" even though `delta-cli usage` shows credit, the requested resources are over what the account may take with a GPU. On one account, `cpu: 4, memory: 16Gi` or a named `gpu_type` with `gpu: 1` was refused while `cpu: 2, memory: 8Gi` with no `gpu_type` worked. Lower `cpu`/`memory`, drop `gpu_type`, and try again (the dry run cannot detect this).
-6. Read `run.json` and use the numbers from its `result_summary` in the post.
+- Use a CPU image and no `gpu` for small experiments. The GPU settings above are known to work; larger `cpu`/`memory` or a named `gpu_type` can be refused by the quota check.
+- Keep delta-cli up to date (`npx @delta-infra/cli@latest install`).
+- Validate for free: `npm run rerun -- posts/<login>/<slug> --record --dry-run`.
+- After the author says yes: `npm run rerun -- posts/<login>/<slug> --record`. It creates one sandbox, runs, pulls the `outputs`, writes `run.json` and kills the sandbox. Run it in the background; it can take many minutes.
+- Afterwards check `delta-cli sandbox list --status running` is empty. Kill anything left over.
 
 ## 4. Write the post
 
-Audience: a smart reader **outside** the field. Required H2 sections, in this order (others may sit between them):
+Required, in this order: `tldr:` (three bullets in front matter: question, finding with the key number, what it does not show), `## The question`, `## What we did`, `## Results`. End with `## What this does and doesn't show` (not checked by the build, but every post has one). **Do not write** `## Specs`, `## Author verification`, `## References` or `## Reproduce`; the build makes them.
 
-1. **TL;DR** (front matter `tldr:`): three bullets: what we asked, what we found *with the key number*, what it does not show.
-2. `## The question`: why anyone should care. No symbols.
-3. `## Background in plain words` (optional name): intuition first (a `> [!INTUITION]` callout or an analogy), *then* the math.
-4. `## What we did` (or `## Experiment` / `## Method`): enough detail to reproduce (data, model, hyperparameters, seeds, hardware, runtime), with `@include file.py#L41-L48` snippets of the real code.
-5. `## Results`: figure(s) + a table + a `> [!TAKEAWAY]` callout with the one-sentence result. Then explain what to notice, numbered.
-6. `## What this does (and doesn't) show`: honest limitations and things not tested.
+For every reader:
 
-**Do not write** `## Specs`, `## Author verification`, `## References` or `## Reproduce`. The build generates them (from `delta.yaml`, `run.json`, `author_verification`, `refs.json`) and rejects hand-written ones.
+- Use `{{result.key}}` for headline numbers. Any number typed by hand must be checked against the output files before publishing.
+- Each embedded figure must be in `outputs` of `delta.yaml`, or be a hand-made diagram whose caption ends with `{diagram}`.
+- Explain what to notice in each picture, in the caption or the text right after it.
+- Say honestly what was not tested. Use "suggests" unless something was proved.
 
-Figures: each embedded figure must be a file listed in `outputs` of `delta.yaml` (or in `outputs` of the front matter if there is no Delta run), or be a hand-made diagram whose caption ends with `{diagram}`. Headline numbers: write `{{result.key}}` (for example `{{result.slope}}`) instead of typing the number, so it comes from `run.json`.
+**For children (about 12):**
 
-Writing rules:
+- Short sentences. Define every new word in **bold** the first time, with an everyday comparison (a "practice round", a "dial").
+- Explain **every setting** of the experiment with a concrete example: what it is, the value used, and what would change if it were bigger or smaller.
+- Show before telling: a picture or animation for each idea, then the words.
+- Put technical details (model size, optimizer, citations, hardware) in `> [!NOTE]` callouts starting **For grown-ups.**
+- Give the reader something to try: a guess to make before a picture, a game to play.
+- Optional: ask ChatGPT (Codex CLI) to rewrite the post for young readers, then re-check every number and figure reference against the outputs, and add ChatGPT to `ai:`.
 
-- **Define every symbol before it appears.** After every important equation write a sentence starting "In words: ...".
-- Prefer short sentences and concrete examples (a `> [!EXAMPLE]` callout with actual numbers works well).
-- Report spread (std / CI / seeds) with every number that has one. Round sensibly (2-3 significant figures).
-- Never overclaim: "consistent with", "suggests" unless you actually proved it. If an experiment disagrees with theory, say so; that is often the most interesting part.
-- Don't pad. 1,000-2,500 words is the usual sweet spot.
-- Raw HTML in Markdown is shown as text, never rendered.
+Markdown features: `$math$` and `$$display$$` (KaTeX), `[@key]` citations, `![alt](file.png "Caption")` figures, callouts (`[!NOTE]`, `[!INTUITION]`, `[!TAKEAWAY]`, `[!WARNING]`, `[!DEFINITION]`, `[!EXAMPLE]`), tables, and `@include experiment.py#L10-L20` for real code. Raw HTML is shown as text, so interactive widgets are not possible; use GIF animations instead.
 
-Markdown features available:
+## 5. Pictures and animations
 
-| Feature | Syntax |
-|---|---|
-| Inline / display math (KaTeX) | `$x^2$`, `$$ \sum_i x_i $$` on its own lines |
-| Citation | `[@key]` or `[@a; @b]` → numbered link to the reference list |
-| Figure with caption | `![alt text](figure.png "Caption. Can contain $math$.")` on its own line |
-| Hand-made diagram | caption ends with `{diagram}` |
-| Run number | `{{result.key}}` from `run.json` `result_summary` |
-| Callouts | `> [!NOTE]`, `> [!INTUITION]`, `> [!TAKEAWAY]`, `> [!WARNING]`, `> [!DEFINITION]`, `> [!EXAMPLE]` |
-| Tables, code blocks | GitHub-flavored Markdown; code is syntax-highlighted |
-| Real code snippet | `@include experiment.py#L41-L48` on its own line → that snippet, linked to the full file |
-| Link to a file | `[experiment.py](experiment.py)` → opens the readable HTML view |
+- PNG for still pictures: labelled axes in words, readable font sizes, white background, `dpi>=150`, `bbox_inches="tight"`. Check each one by eye for overlaps and cut-off titles.
+- GIF for animations: fixed frame size, quantized to about 64 colours, a pause on the last frame, under 5 MB. Also save the key frame as a PNG so the idea survives without motion.
+- No matplotlib SVGs (rejected). No HTML files. At most 5 MB per file and 25 MB per post.
 
-Every code, CSV, TSV, JSON and notebook file in the folder gets a readable page and is listed in "Code & data". Snippet line ranges are checked at build time. In YAML front matter strings, escape backslashes in math (`"$2.4\\times10^{-3}$"`); in the Markdown body write LaTeX normally.
+## 6. References and chat excerpts
 
-## 5. AI & process: ask the author
+- Put cited papers in `refs.json` (`key`, `title`, `authors`, `year`, `doi` or `arxiv`, and a one-line `claim`). Never cite from memory: look the paper up first.
+- Run `npm run check-refs -- posts/<login>/<slug>`. If a paper is not found, fix the details or remove it and the claim that uses it. Read each abstract in `.refcheck.json` against its `claim` and soften the sentence if needed.
+- Do not commit the `refcache.json` change that `check-refs` makes (`git checkout -- refcache.json`).
+- The post needs at least one `chat/*.md` excerpt or a `chat_links` entry. Save the key prompts and decisions, remove anything private, and show them to the author before committing.
 
-Ask the author, in one message:
-
-- Which AI tools and exact model names did they use, and for what (this becomes `ai:`; at least one entry)?
-- In their own words, what did they do and what did the AI do (this becomes `contribution:`, at least 40 characters)?
-- Any public share links of the conversations (`chat_links`)?
-
-Fill `ai:` only with what they answer, and paste their `contribution` text as given. Do not draft it for them or "improve" it beyond typos. If they ask for help phrasing it, offer options and let them pick or rewrite.
-
-## 6. Save chat excerpts
-
-The post needs at least one file in `chat/*.md` or a `chat_links` entry. Pick the key excerpts of the AI conversation (the question, important decisions, where the AI was corrected or wrong), save them as Markdown in `chat/`, and **show them to the author and ask to confirm they may share them** under their AI provider's terms. Remove names, keys, paths and unpublished data first. Do not save an excerpt the author has not approved.
-
-## 7. References: add, verify, and check the claim
-
-Every paper you cite goes in `posts/<user>/<slug>/refs.json`:
-
-```json
-[
-  {
-    "key": "he2015",
-    "title": "On the convergence rate of randomized quasi-Monte Carlo for discontinuous functions",
-    "authors": ["Zhijian He", "Xiaoqun Wang"],
-    "year": 2015,
-    "doi": "10.1137/15M1007963",
-    "claim": "What we cite this paper for, in one sentence."
-  },
-  { "key": "vaswani2017", "title": "Attention Is All You Need", "authors": ["Ashish Vaswani"], "year": 2017, "arxiv": "1706.03762", "claim": "..." },
-  { "key": "numpy", "type": "web", "title": "NumPy", "url": "https://numpy.org/", "claim": "Library used." }
-]
-```
-
-`doi` / `arxiv` are optional (the checker searches by title without them, and fills them in when found). `type: "web"` is for software, datasets and pages that are not papers; the checker only confirms the URL resolves.
-
-- **Do not cite from memory without verification.** If you are not sure a paper exists, search for it first (WebSearch / arXiv) and take the title, authors, year and arXiv id/DOI from the actual paper page.
-- Cite primary sources, and only papers whose content you have checked against the claim.
-
-Then run:
+## 7. Preview and sign-off
 
 ```bash
-npm run check-refs -- posts/<user>/<slug>
+npm run build:drafts && npm run serve     # http://localhost:4321
 ```
 
-It looks each entry up in arXiv / Crossref / Semantic Scholar, compares title, first author and year, and writes `verified: true` plus the source into `refs.json`. It exits non-zero if anything fails. `--fix` replaces title/authors/year/venue with the canonical metadata.
+Fix every error. Look at the page: pictures load, animations play, math renders, tables fit, and the text works at phone width.
 
-- **FAIL "id resolves to a different paper"**: the arXiv id or DOI is wrong. Find the right one; don't just delete the id.
-- **FAIL "not found"**: the paper may not exist (hallucinated) or the title is wrong. Search the web for it. If you cannot find it, **remove the citation and the claim that depends on it**.
-- **Claim check (mandatory):** open `posts/<user>/<slug>/.refcheck.json`, read each `abstract` next to its `claim`, and confirm the abstract supports how the post uses the paper. If the abstract is missing (common for old papers and books), fetch the paper page with WebFetch and check there. If the claim is stronger than what the paper says, soften the sentence. In your final summary to the user, list each reference with one line on how its claim was checked.
+Then show the author the preview and ask, in one message, for:
 
-## 8. Author verification: the author's own sign-off
+- `ai:` entries (tools and models used, and for what);
+- `contribution` (what they did and what the AI did);
+- `author_verification.checked` (what they actually checked; must be specific).
 
-Publishing requires the author's own check of the results. Ask them to verify the numbers and figures themselves (re-run, spot-check against the data files, read the cited sources), then ask them to write, in their own words, **what they actually checked** (specific: which run, which number, against what; boilerplate or empty text is rejected by CI).
+After they confirm the exact words, set `verified: true`, `by: <login>`, `date: <today>`, remove `draft: true`, and run the strict `npm run build`.
 
-Show the author the exact `checked` text (their words) and get an explicit confirmation before writing it into `author_verification.checked`; or ask them to edit the file themselves. Set `verified: true`, `by: <their GitHub login>`, `date: <today, YYYY-MM-DD>` only after that confirmation. **Never write `checked` yourself, never paraphrase it into something they did not say, and never mark `verified: true` on their behalf if they have not checked.** If they have not checked yet, leave the stub as is; the post stays a draft.
+## 8. Publish
 
-## 9. Build and preview
+After the author says yes:
 
 ```bash
-npm test                      # optional, the same suite CI runs
-npm run build:drafts          # strict on math, references, sections, figures, schema
-npm run serve                 # http://localhost:4321 (drafts shown)
+git switch -c post/<slug> origin/main
+git add posts/<login>/<slug>
+git commit -m "post: <title>"
+git push -u origin post/<slug>
+gh pr create --repo seawan/vibe-research --title "post: <title>" --body "<summary and contribution>"
 ```
 
-Fix every `error:`. Then look at the post in the browser: math renders, figures load and are readable in dark mode, the table fits, citations link to the reference list, the AI & process box and Specs/Reproduce sections look right. Check one page at phone width. For a draft, schema problems appear as warnings; they become errors once `draft: true` is removed, so clear all of them.
+- The PR may change only files in `posts/<login>/<slug>/`.
+- CI runs tests, re-checks references and builds the site, then posts a checklist comment. If a check fails, read the log and fix it.
+- The site owner merges (for the owner's own post: after checks pass, `gh pr merge <n> --squash --delete-branch`, with the author's yes). The site deploys from `main` in a few minutes.
+- After the deploy, check the live page at `https://seawan.github.io/vibe-research/posts/<login>/<slug>/`: the title, the Delta-reproducible badge, no leftover `{{result`, and every picture returns 200 (use `curl -sI`; browser checks miss lazy-loaded images).
 
-## 10. Publish: fork, branch, pull request
-
-1. Show the author the preview and a short summary: title, TL;DR, figures, reference check results, the `ai` and `contribution` text as written, the author-verification text, whether the post earns the Delta badge. **Ask before opening the pull request.**
-2. If `author_verification` is not complete (`verified: true`, `by`, `date`, specific `checked`), stop here: keep `draft: true` and do not open the PR. Otherwise, on approval: remove `draft: true` from the front matter and run `npm run build` (strict). Fix any error.
-3. Create a branch, commit only `posts/<user>/<slug>/`, and open the PR (check that `origin` is the author's fork, or fork first with `gh repo fork seawan/vibe-research`):
-
-   ```bash
-   git switch -c post/<slug>
-   git add posts/<user>/<slug>
-   git commit -m "post: <title>"
-   git push -u origin post/<slug>
-   gh pr create --repo seawan/vibe-research --title "post: <title>" --body "<one-paragraph summary and the contribution statement>"
-   ```
-
-   The PR may touch nothing outside `posts/<user>/<slug>/` (CI rejects anything else, including `refcache.json`). Pushing and `gh pr create` happen only after the author's yes.
-4. Tell the author what happens next: the PR checks workflow runs (tests, reference re-check, strict build) and posts a checklist comment; the owner reviews and merges by hand; the site rebuilds from `main`. A post can be taken down by reverting its commits.
+To change a published post later, edit the same folder, rerun if outputs change, and open a new PR the same way.

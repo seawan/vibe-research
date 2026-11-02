@@ -7,7 +7,16 @@ description: Write and publish a Vibe Research post (seawan/vibe-research), eith
 
 A post is one folder, `posts/<github-login>/<slug>/`, added by pull request to `seawan/vibe-research`. CI builds it strictly: references must be verified, math must render, required sections must exist, and every figure must be a real run output. The full rules are in the repo's `CONTRIBUTING.md`; this skill is the working recipe.
 
-Work from a clone of the repo. If the current folder is not one, tell the user to run `gh repo fork seawan/vibe-research --clone` (the owner clones directly), then `npm ci`, and continue there.
+## 0. Find the site folder
+
+The skill can be started from any folder. All post work happens in a local copy (clone) of the repo, called **the site folder** below; the folder the user started in is **the research folder**.
+
+1. If the current folder is inside a clone of `seawan/vibe-research` (check `git remote -v`), that is the site folder.
+2. Otherwise, look for an existing clone: `readlink` of `~/.claude/skills/publish-vibe-research` (the skill is usually a symlink into a clone), then common places such as `~/vibe-research` and `~/*/vibe-research`. Confirm with `git -C <dir> remote -v`. If one is found, tell the user which one you will use.
+3. If none is found, ask the user where their copy is. If they have none, offer to make one: `gh repo fork seawan/vibe-research --clone` (the owner runs `gh repo clone seawan/vibe-research` instead), then `npm ci` inside it.
+4. In the site folder, run `git fetch origin` and start new work from `origin/main`. Run every `npm run` command from the site folder.
+
+If the user started in a research folder, read its code, notebooks, data and figures there, and copy the files the post needs into the post folder in step 2. Do not move or change the user's originals.
 
 ## Hard rules
 
@@ -31,7 +40,7 @@ Find out, in one short round of questions (skip what is already clear):
 npm run new -- "Post title"
 ```
 
-This makes `posts/<login>/<slug>/` with `index.md` (a draft) and an empty `refs.json`. If `gh` is not logged in, add `--user <login>`.
+Run it in the site folder. This makes `posts/<login>/<slug>/` with `index.md` (a draft) and an empty `refs.json`. If `gh` is not logged in, add `--user <login>`. When starting from existing results, copy the code and data from the research folder into this post folder.
 
 Write the code so a reader can open it in the browser and follow it:
 

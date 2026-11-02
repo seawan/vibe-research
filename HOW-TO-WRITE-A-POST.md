@@ -23,7 +23,15 @@ This guide is the short version. You tell Claude what you want, check its work, 
 
    If you own the site, skip the fork and clone `seawan/vibe-research` directly.
 
-4. **Keep delta-cli up to date** from time to time:
+4. **Let Claude use the post-writing skill from any folder.** Inside the `vibe-research` folder, run this once:
+
+   ```bash
+   mkdir -p ~/.claude/skills && ln -s "$PWD/skills/publish-vibe-research" ~/.claude/skills/publish-vibe-research
+   ```
+
+   Now `/publish-vibe-research` works wherever you open Claude, even in a folder with your own research. Claude finds your copy of the site and adds the post there. Because it is a link, the skill stays up to date whenever you update your copy (`git pull`).
+
+5. **Keep delta-cli up to date** from time to time:
 
    ```bash
    npx @delta-infra/cli@latest install
@@ -31,9 +39,9 @@ This guide is the short version. You tell Claude what you want, check its work, 
 
 ## Writing a post, step by step
 
-### 1. Open Claude in the site folder
+### 1. Open Claude
 
-Open Claude Code and point it at your `vibe-research` folder.
+Open Claude Code in your `vibe-research` folder. If you installed the skill in step 4 above, you can also open it in any other folder, for example the one with your own results.
 
 ### 2. Tell Claude your idea
 

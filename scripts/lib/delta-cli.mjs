@@ -46,6 +46,9 @@ export function parseOutput(stdout, code, stderr = '') {
   const envelopes = jsonObjects(rest.join('\n'));
   const complete = frames.findLast((f) => f?.type === 'complete');
   const failed = envelopes.find((e) => e?.ok === false);
+  const init = frames.find((f) => f?.type === 'init' && f.execution_id);
+  // newer delta-cli reports a dropped live stream as a network error; the command itself is still running
+  if (failed && !complete && init && failed.error?.type === 'network') return { json: { type: 'incomplete', execution_id: init.execution_id }, stdout };
   if (failed) {
     const e = failed.error ?? {};
     throw new DeltaError(e.type ?? 'internal', e.message ?? 'delta-cli reported an error', { frame: complete, hint: e.hint });
@@ -63,7 +66,6 @@ export function parseOutput(stdout, code, stderr = '') {
     return { json: complete, stdout };
   }
   // stream ended without a complete frame: hand back the execution id so the caller can poll for the result
-  const init = frames.find((f) => f?.type === 'init' && f.execution_id);
   if (init && frames.length) return { json: { type: 'incomplete', execution_id: init.execution_id }, stdout };
   const ok = envelopes.findLast((e) => e?.ok === true);
   if (ok) return { json: ok, stdout };

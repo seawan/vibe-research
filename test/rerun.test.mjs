@@ -206,6 +206,13 @@ test('parseOutput returns the execution id when the stream ends without a comple
   assert.deepEqual(parseOutput(sse, 0).json, { type: 'incomplete', execution_id: 'ex-9' });
 });
 
+test('parseOutput treats a dropped stream (network error envelope) as still running', () => {
+  const out = 'data: {"type":"init","execution_id":"ex-9"}\n\ndata: {"type":"stdout","data":"step 1"}\n\n'
+    + '{"ok":false,"error":{"type":"network","message":"read SSE stream: connection reset by peer"}}\n';
+  assert.deepEqual(parseOutput(out, 6).json, { type: 'incomplete', execution_id: 'ex-9' });
+  assert.throws(() => parseOutput('{"ok":false,"error":{"type":"network","message":"dial tcp: timeout"}}\n', 6), /dial tcp/);
+});
+
 test('record does not write run.json when the run fails', async () => {
   const postDir = copyHello();
   const before = fs.readFileSync(path.join(postDir, 'run.json'), 'utf8');

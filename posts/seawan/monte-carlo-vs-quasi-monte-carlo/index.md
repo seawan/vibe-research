@@ -123,7 +123,7 @@ A **GPU**, a computer chip that can do many checks at once, ran the experiment i
 
 First, the guesses themselves. This picture shows each team's guess in its first game as we add more darts. The dashed line is the real pi.
 
-![A chart of guesses for pi. With few darts, both teams' guesses jump around above and below the dashed line for the real pi. As the number of darts grows, both guesses settle onto the line, and the Halton guess settles sooner.](guesses.png "Each team's guess for π in its first game, as the number of darts grows. The dashed line is the real π. With more darts, both guesses close in on it.")
+![A chart of guesses for pi. With few darts, both teams' guesses jump around near the dashed line for the real pi. As the number of darts grows, both guesses settle onto the line, and the Halton guess settles sooner.](guesses.png "Each team's guess for π in its first game, as the number of darts grows. The dashed line is the real π. With more darts, both guesses close in on it.")
 
 Here are some of those guesses next to the real pi:
 
@@ -136,7 +136,7 @@ Here are some of those guesses next to the real pi:
 | about a billion | {{result.guess_random_1b}} | {{result.guess_halton_1b}} |
 | **The real pi** | **{{result.pi_true}}** | **{{result.pi_true}}** |
 
-Read the table from top to bottom and compare each guess with the real pi on the last row, digit by digit. With 64 darts, the guesses only get the first digit or two right. With about a billion darts, the guesses match many more digits of the real pi.
+Read the table from top to bottom and compare each guess with the real pi on the last row, digit by digit. With 64 darts, both teams only get 3.1 right. With about a billion darts, Team Random gets 3.141 right and Team Halton gets 3.141592 right.
 
 These are single games, and a single game can be lucky or unlucky. To compare the teams fairly, we need the average over all 50 games.
 
@@ -146,7 +146,7 @@ Team Halton had the smaller average error at every number of darts we tested.
 
 Its lead grew as the games got bigger.
 
-![A bar chart. With 64 darts, neat darts are 1.6 times more accurate. With 4,096 they are 5.8 times, with 262,144 they are 18 times, with about 17 million they are 65 times, and with about a billion they are 148 times more accurate.](race.png "How many times smaller Team Halton's average miss was than Team Random's, for each number of darts. Each bar compares 50 games per team.")
+![A bar chart. With 64 darts, neat darts are 1.8 times more accurate. With 4,096 they are 6.6 times, with 262,144 they are 17 times, with about 17 million they are 68 times, and with about a billion they are 144 times more accurate.](race.png "How many times smaller Team Halton's average miss was than Team Random's, for each number of darts. Each bar compares 50 games per team.")
 
 At the smallest size, the difference was modest. At about a billion darts, Team Halton’s average miss was about {{result.better_by_1b}} times smaller.
 

@@ -14,5 +14,6 @@ timeout: 1800
 outputs:
   - results.csv
   - error.png
+  - guesses.png
   - darts.png
   - race.png

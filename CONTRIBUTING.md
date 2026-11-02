@@ -65,6 +65,16 @@ By opening a PR you confirm that you have the right to publish everything in you
 - Allowed file types: `md json yaml yml csv tsv txt py ipynb jl r sh js mjs ts lean c cpp h rs go java m tex bib toml cfg ini png jpg jpeg gif webp svg pdf`. No executables, no HTML, no files without an extension, no symlinks.
 - SVG files are checked against a strict allowlist: only plain drawing elements (`svg g defs symbol use path rect circle ellipse line polyline polygon text tspan textPath title desc linearGradient radialGradient stop clipPath mask pattern marker image`), no `<style>`, `<script>`, `<foreignObject>`, `<a>` or animation elements, no namespaced elements, no `on*` attributes, no DOCTYPE/entities (only `&amp; &lt; &gt; &quot; &apos;`), and links only to `#fragments` or files in the post. Matplotlib SVGs include `<metadata>` and `<style>` and are rejected: prefer PNG, or strip those elements.
 
+### Interactive versions (site owner only)
+
+The post itself is always Markdown. The site owner can also add a full interactive page (live charts, sliders, widgets) as `interactive/<name>.html` at the top of the repository and link a post to it with one front-matter line:
+
+```yaml
+interactive: self-taught-adder   # serves interactive/self-taught-adder.html
+```
+
+The post then shows an "Open the interactive version" button above the TL;DR. The page is served exactly as written, so its scripts run on the site: that is why only the owner adds these pages, by reviewed PR. Contributor PRs that touch `interactive/` fail the path check below. The name may use lowercase letters, digits and dashes; a missing page is a build error. Every number on an interactive page must also appear, traceable to a run output, in the Markdown post.
+
 ## What CI checks on your PR
 
 The **PR checks** workflow runs with a read-only token and checks:

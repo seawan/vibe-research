@@ -2,6 +2,8 @@
 
 A static site for AI-assisted research written up like a short paper: Markdown + KaTeX math, figures, callouts, numbered citations that must be machine-verified, an AI & process box, author verification, and a Delta rerun package.
 
+**New here? Start with [HOW-TO-WRITE-A-POST.md](HOW-TO-WRITE-A-POST.md)**, a short step-by-step guide to writing a post with Claude.
+
 Anyone can contribute a post by pull request: see [CONTRIBUTING.md](CONTRIBUTING.md) for the post format, licenses, limits and review policy.
 
 ## Daily use

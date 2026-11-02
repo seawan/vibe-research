@@ -1,9 +1,9 @@
 ---
-title: "A tiny storyteller: watching an AI learn to write"
-subtitle: "We built a very small version of the kind of AI behind chatbots, gave it Grimms' Fairy Tales to read, and watched its writing go from gibberish to almost-stories."
+title: "Can a tiny computer learn to tell a fairy tale?"
+subtitle: "We gave a little text-guessing program a book of fairy tales. Watch its writing change as it practises."
 date: 2026-11-01
-summary: "We trained a tiny language model, with about {{result.parameters}} adjustable numbers, to write like Grimms' Fairy Tales one letter at a time. In a few minutes of practice it went from random letters to fairy-tale-sounding sentences that don't quite make sense."
-tags: [machine learning, language models, transformers, for young readers]
+summary: "Can a computer get better at guessing the next letter in a book? Our tiny storyteller went from jumbled letters to writing that sounds like a fairy tale. But its stories still don't quite make sense."
+tags: [AI, fairy tales, guessing games, for young readers]
 code: "experiment.py"
 draft: true
 authors: [seawan]
@@ -11,6 +11,9 @@ ai:
   - name: "Claude"
     model: "claude-opus-5-5"
     role: "wrote the code, ran the experiment in a Delta sandbox, made the pictures and wrote the post"
+  - name: "ChatGPT (Codex CLI)"
+    model: "gpt-6.1-sol"
+    role: "rewrote the post for young readers"
 contribution: ""  # TO FILL IN BY THE AUTHOR, in your own words: what you did and what the AI did
 license: CC-BY-4.0
 code_license: MIT
@@ -21,71 +24,134 @@ author_verification:
   date: ""
   checked: ""
 tldr:
-  - "AI chatbots write by guessing the next bit of text, over and over. We built a tiny model that guesses the next **letter**, trained it on Grimms' Fairy Tales, and watched what it wrote as it learned."
-  - "At the start it was torn between about {{result.torn_between_start}} letters for every guess. After {{result.steps}} practice steps it was torn between only about **{{result.torn_between_end}}**, and its writing went from gibberish to fairy-tale-sounding sentences."
-  - "Its stories still don't make sense. It is about a hundred thousand times smaller than real chatbots and read only one book, so this shows **how** they learn, not how good they are."
+  - "Our tiny storyteller plays a game: guess the next letter."
+  - "After practice, its guesses improved and its writing sounded more like fairy tales."
+  - "Better guesses did not give it stories that made sense."
 ---
 
 ## The question
 
-When you chat with an AI like Claude or ChatGPT, it can feel like magic. But underneath, these programs do something surprisingly simple: **they guess what comes next**, over and over again.
+Can a computer get better at guessing the next letter just by practising with a book?
 
-A famous scientist, Claude Shannon, played a game like this in 1951. He showed people the start of a sentence and asked them to guess the next letter [@shannon1951]. People are good at it, because they know words and stories. Could a computer learn to play the same game, just by reading?
+Try the game yourself. Read this:
 
-We wanted to see this with our own eyes. So we built a **tiny storyteller**, gave it a book of fairy tales, and watched how its writing changed as it learned.
+> Once upon a ti
 
-## How a computer can learn to write
+Which letter comes next? You probably picked “m”. After that, you would probably pick “e”.
 
-Our storyteller only ever does one thing: **look at the last 128 letters, and guess the next one.**
+**The right answer is the actual next letter in the book.** We want to find out whether a computer gets better at guessing that letter.
 
-> [!INTUITION]
-> Imagine reading "Once upon a ti". What comes next? Almost certainly "m". Then "Once upon a tim" is followed by "e". You can guess because you've read lots of stories. Our storyteller learns the same way: it reads the book again and again, makes guesses, and gets nudged every time it is wrong.
+A **language model** is a program that guesses the next bit of text. Our little model guesses a letter at a time. It also guesses spaces and marks such as commas. We will call it our tiny storyteller.
 
-To write a story, we give it a start, "Once upon a time", and let it guess one letter. We add that letter to the end and ask for the next one, and so on. It's like a game of consequences where the same player keeps adding a letter.
+The scientist Claude Shannon tried a next-letter guessing game with people, too [@shannon1951]. We tried it with a computer and a book of fairy tales.
 
-Its guesses come with odds, for example "m: 95%, n: 3%, anything else: 2%". When it writes, we pick letters according to those odds, so its stories come out a little different every time.
+### What does “torn between” mean?
 
-The model is a **transformer**, the same design used by today's chatbots [@vaswani2017]. Its special trick is called **attention**: when it guesses a letter, it can look back and decide which earlier letters matter most. It has {{result.parameters}} adjustable numbers inside it. That sounds like a lot, but real chatbots have hundreds of billions.
+Imagine seeing just the letter “t”. Many letters could follow it. You might feel **torn between** several choices: unsure which to pick.
+
+With “Once upon a ti”, you have a much stronger clue. You are probably much less torn.
+
+We use a score to describe the model's uncertainty. Scientists call it **perplexity**. We will call it the “letters torn between” score. A lower score means better guesses about the real next letters.
+
+Here are our comparison points:
+
+- A model that knows nothing and gives every choice an equal chance would score **{{result.alphabet_size}}**. That is every letter and symbol in this book.
+- A perfect model would score **1**. It would always give all its chance to the correct next letter.
+
+The score is a way to sum up many guesses. It is not a count of letters on a list inside the computer.
 
 ## What we did
 
-1. **The book.** We used [Grimms' Fairy Tales](grimm.txt), a public-domain book of about half a million letters, with stories like Hansel and Gretel and Rumpelstiltskin. The model practised on the first 90% of the book. We kept the last 10% hidden, to test it on writing it had never seen.
-2. **The practice.** In each step, the model read 64 random stretches of 128 letters from the book, guessed every next letter, and was nudged towards the right answers. We did {{result.steps}} steps.
-3. **Checkpoints.** At a few points during practice we stopped and measured how "surprised" it was by the hidden part of the book, and asked it to continue "Once upon a time".
-4. **Where it ran.** In a Delta cloud sandbox with 4 ordinary computer processors (CPUs). A model this small doesn't need a graphics card. The whole thing took {{result.seconds}} seconds.
+### Give the storyteller some practice
 
-Here is how a story gets written, one letter at a time, from [`experiment.py`](experiment.py):
+For a computer, **practice**, also called **training**, means making guesses and adjusting numbers inside the program using the right answers. It does not mean trying hard or thinking like you.
+
+We used [Grimms' Fairy Tales](grimm.txt). The storyteller practised on the earlier part of the book. We saved the ending for a test. It never practised on that part.
+
+A **practice step** is a round of guesses and adjustments. Each round includes lots of next-letter guesses. We ran {{result.steps}} steps.
+
+The program picked passages by chance. That is what **random** means here. Think of rolling a die to choose a move in a game. You do not choose which face lands on top.
+
+### Let it look back for clues
+
+Our storyteller uses a design called a **transformer**. This design has a way to give some earlier bits of text more weight when making a guess. That is called **attention** [@vaswani2017].
+
+Think about guessing the next letter after “Once upon a ti”. The letters “ti” are useful clues. Attention helps the program use clues from earlier text. It does not mean the computer is paying attention the way you do.
+
+### Ask it to write
+
+We gave the storyteller this beginning:
+
+> Once upon a time
+
+Then it chose a next letter. We added that letter and asked again.
+
+Its choices have different chances. We call those chances **odds**. When it writes, the program picks letters using those odds. A more likely letter has a better chance of being picked. This lets the storyteller write different passages from the same beginning.
+
+> [!NOTE]
+> **For grown-ups.** The model had {{result.parameters}} adjustable parameters and practised on {{result.training_letters}} characters. It ran on a graphics processing unit, or GPU—a chip that can do many calculations at once—in a Delta cloud sandbox, a separate online computing space. The GPU was an {{result.device}}. The run took {{result.seconds}} seconds.
+
+> [!NOTE]
+> **For grown-ups.** The following excerpt from [`experiment.py`](experiment.py) shows how the program chooses and adds the next character.
 
 @include experiment.py#L129-L133
 
-In words: ask the model for its odds for the next letter, pick one according to those odds, stick it on the end, repeat.
-
 ## Results
 
-### Its writing, as it learned
+### What did it write?
 
 ![Four short passages that each begin with "Once upon a time". The first is random letters, the second has word-like chunks, the third has real words, and the fourth reads like a fairy tale that does not quite make sense.](samples.png "What the storyteller wrote after 0, 300, 1,000 and {{result.steps}} practice steps, each time starting from \"Once upon a time\".")
 
-STORY-SAMPLES-PLACEHOLDER
+Here is another sample, after 100 practice steps. The strange spellings are exactly what it wrote:
 
-### How surprised it is by new text
+> Once upon a timer ad the foun tour llore the oust wind he ont f mor hend spin ter, lsPr the thilothithawber we heokereir t he st, f inthad ind owhe w a Tono asom wowim, w he cies!’ rand fand ble th he he fo wen ce wethithes hed hengan.
 
-We measured how many letters the model was "torn between" for each guess on the hidden part of the book. (Scientists call this the *perplexity*.) A model that knew nothing would be torn between all {{result.alphabet_size}} different letters and symbols in the book. A perfect model would be torn between just 1.
+What changed along the way:
 
-![A chart with two falling lines: one for text the model learned from and one for text it never saw. Both fall from about 80 to under 4.](learning.png "How many letters the model is torn between when guessing, on text it practised on (blue) and text it never saw (orange). Lower is better.")
+- **After 0 steps:** it writes a jumble of letters, numbers and symbols.
+- **After 100 steps:** spaces and little words such as “the” and “he” appear. Much of the passage is still made up.
+- **After 300 steps:** more real words appear, along with commas and quotation marks.
+- **After 1,000 and {{result.steps}} steps:** the samples sound more like fairy tales. They include speech, such as ‘I will’ and ‘Don the man!’ replied…. But the sentences still do not quite make sense.
+
+These samples show changes in its writing. They do not tell us exactly when it picked up each pattern.
+
+### Did its guesses get closer to the right answer?
+
+Remember: the right answer for each guess is **the real next letter in the book**. The perfect score is **1**.
+
+Here are the scores at our stopping points. Smaller is better.
+
+| Practice steps | Text it never saw | Text it practised on | Perfect score |
+|---|---:|---:|---:|
+| 0 | 93.2 | 93.3 | 1 |
+| 100 | 10.1 | 9.9 | 1 |
+| 300 | 5.7 | 5.5 | 1 |
+| 1,000 | 4.0 | 3.4 | 1 |
+| 2,000 | 3.8 | 2.9 | 1 |
+
+Our “knows nothing” comparison scores {{result.alphabet_size}}. The storyteller began even worse than that comparison. Giving a wrong letter too much chance can hurt its score.
+
+By the end, its score on unseen text was about **3.8**. That is much better than its starting score of **93.2**, but it is still above the perfect score of **1**.
+
+![A chart with two falling lines: one for text the model learned from and one for text it never saw. Both fall from about 90 to under 4.](learning.png "How many letters the model is torn between when guessing, on text it practised on (blue) and text it never saw (orange). Lower is better.")
+
+The score improved on the hidden pages, too. That is evidence it picked up patterns useful beyond its practice passages.
+
+It did better on pages it had practised on. That could partly come from remembering those pages. The gap alone does not tell us how much it remembered.
 
 > [!TAKEAWAY]
-> By reading one book and guessing the next letter {{result.steps}} times, a tiny model went from being torn between about {{result.torn_between_start}} letters to about {{result.torn_between_end}}, and learned spelling, words and the feel of a fairy tale on its own.
+> Practice helped our tiny storyteller guess letters on unseen pages. Its writing also sounded more like fairy tales. But better letter guesses did not turn it into a storyteller whose tales made sense.
 
-What to notice:
+## What this does and doesn't show
 
-1. **It learns in stages.** First it learns which letters are common, then spaces and short words, then longer words and punctuation, then the style of the book.
-2. **It never learned the meaning.** Its stories sound like fairy tales, but characters appear and vanish and nothing really happens. Getting meaning needs much bigger models and much more reading.
-3. **New text vs. practice text.** The two lines stay close together, so the model learned general patterns of the book, not just memorised the pages it practised on.
+**It picked up useful patterns.** Its guesses improved on text it had never practised on. It did more than simply repeat the sample passages shown here.
 
-## What this does (and doesn't) show
+**We have not shown that it understands stories.** Familiar words and story-like speech are not enough to prove understanding. Characters can appear and vanish without a sensible reason.
 
-- **Tiny compared to real chatbots.** Ours has about {{result.parameters}} numbers and read one book. Real chatbots have hundreds of billions of numbers, read a large part of the internet and books, and get extra training to be helpful and safe. This shows *how* they learn, not how good they are.
-- **Letters, not words.** Real chatbots guess chunks of words called *tokens*, not single letters. We used letters because they are easier to see and understand.
-- **One run.** We trained once with one random start. Another run would write different stories, though we expect a similar "torn between" score. We did not test that.
-- **Old-fashioned English.** The book is a translation from the 1800s, so the model writes in that style.
+**It is tiny compared with real chatbots.** We used a small program and a single book. This experiment shows how practice can improve next-letter guesses. It does not show how well a full chatbot works.
+
+**It guesses letters.** Chatbots usually guess pieces of text that may be whole words or parts of words. Those pieces are called **tokens**. Our letters make the guessing game easier to see.
+
+**We tried this once.** A different start could produce different writing and scores. We did not run it again to check.
+
+**Its book uses old-fashioned English.** That helps explain why its writing sounds like an old fairy tale. We have not shown how well it would write about your school day—or anything else outside that book.

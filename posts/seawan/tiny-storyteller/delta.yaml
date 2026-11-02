@@ -9,10 +9,25 @@ sandbox:
   max_life: 60
 upload: "."
 setup: "pip install matplotlib"
-command: "python experiment.py"
+command: "python experiment.py && python pictures.py"
 timeout: 2400
 outputs:
   - results.csv
   - samples.json
+  - probes.json
   - learning.png
   - samples.png
+  - book.png
+  - alphabet.png
+  - practice.png
+  - model.png
+  - torn.png
+  - odds.gif
+  - odds.png
+  - read-along.gif
+  - read-along.png
+  - first-guess.png
+  - typewriter.gif
+  - growing.gif
+  - attention.png
+  - dial.png

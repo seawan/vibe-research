@@ -221,6 +221,21 @@ test('cli: co-author deletes a file and renames are seen as delete + add', () =>
   assert.match(v.md, /bob\/old/);
 });
 
+test('maintainers may change files outside posts, other rules still apply', () => {
+  const changed = [f('README.md'), f('scripts/build.mjs'), f('posts/alice/new/index.md'), f('posts/alice/new/x.exe')];
+  const v = checkPr({ changed, prAuthor: 'alice', baseAuthors: () => null, headAuthors: () => ['alice'], maintainer: true });
+  assert.deepEqual(v, ['posts/alice/new/x.exe: file type .exe is not allowed (see CONTRIBUTING.md)']);
+});
+
+test('cli: --maintainer lets a code change pass, without it the same change fails', () => {
+  const r = repo();
+  r.write('scripts/x.mjs', 'export {};\n');
+  r.git('add', '-A'); r.git('commit', '-q', '-m', 'code');
+  const args = ['--base', r.base, '--head', r.git('rev-parse', 'HEAD'), '--author', 'bob', '--pr', '12'];
+  assert.equal(cli(r.d, args).code, 1);
+  assert.equal(cli(r.d, [...args, '--maintainer']).code, 0);
+});
+
 test('cli: rejects invalid --pr', () => {
   const r = repo();
   assert.equal(cli(r.d, ['--base', r.base, '--head', r.base, '--author', 'alice', '--pr', '7; rm -rf /']).code, 1);

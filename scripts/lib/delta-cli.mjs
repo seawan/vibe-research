@@ -2,6 +2,8 @@
 // Envelopes look like {"ok":true,"data":{...}} / {"ok":false,"error":{"type","message"}};
 // `run` and `run-bg --wait` stream SSE frames `data: {...}` and end with a `complete` frame.
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 
 export class DeltaError extends Error {
   constructor(type, message, { frame, hint } = {}) {
@@ -87,11 +89,33 @@ function track(child) {
   }
 }
 
+// What to spawn for delta-cli, as { command, prefix } (prefix args go before the caller's args); never a shell.
+// DELTA_CLI overrides the lookup: a .js/.mjs/.cjs path runs under this node, anything else is spawned as is.
+// On Windows npm installs delta-cli as a .cmd/.ps1 shim that spawn cannot run without a shell, so the shim is
+// resolved to node + the package's scripts/run.js next to it (preferring a node.exe there, as the shim does).
+export function resolveDeltaBin({ env = process.env, platform = process.platform, execPath = process.execPath, exists = fs.existsSync } = {}) {
+  const override = env.DELTA_CLI?.trim();
+  if (override) return /\.[cm]?js$/i.test(override) ? { command: execPath, prefix: [override] } : { command: override, prefix: [] };
+  if (platform !== 'win32') return { command: 'delta-cli', prefix: [] };
+  const pathKey = Object.keys(env).find((k) => k.toUpperCase() === 'PATH');
+  for (const dir of (env[pathKey ?? 'PATH'] ?? '').split(';').map((d) => d.replace(/^"|"$/g, '')).filter(Boolean)) {
+    if (exists(path.win32.join(dir, 'delta-cli.exe'))) return { command: path.win32.join(dir, 'delta-cli.exe'), prefix: [] };
+    if (!exists(path.win32.join(dir, 'delta-cli.cmd'))) continue;
+    const runJs = path.win32.join(dir, 'node_modules', '@delta-infra', 'cli', 'scripts', 'run.js');
+    if (!exists(runJs)) continue;
+    const localNode = path.win32.join(dir, 'node.exe');
+    return { command: exists(localNode) ? localNode : execPath, prefix: [runJs] };
+  }
+  return { command: 'delta-cli', prefix: [] };
+}
+
 // echo(text): receives the sandbox command's stdout/stderr frames and delta-cli's own stderr as they arrive.
-export function deltaCli(args, { echo = null, bin = 'delta-cli', spawnImpl = spawn } = {}) {
+// bin, when given, is spawned directly; otherwise resolveDeltaBin() picks it (DELTA_CLI, Windows npm shim).
+export function deltaCli(args, { echo = null, bin, spawnImpl = spawn, resolveBin = resolveDeltaBin } = {}) {
+  const { command, prefix } = bin ? { command: bin, prefix: [] } : resolveBin();
   return new Promise((resolve, reject) => {
     let child;
-    try { child = spawnImpl(bin, args, { stdio: ['ignore', 'pipe', 'pipe'], detached: true }); } catch (err) { return reject(err); }
+    try { child = spawnImpl(command, [...prefix, ...args], { stdio: ['ignore', 'pipe', 'pipe'], detached: true, windowsHide: true }); } catch (err) { return reject(err); }
     if (child.pid) track(child);
     let out = '', err = '', pending = '';
     child.stdout.setEncoding('utf8');
@@ -113,7 +137,7 @@ export function deltaCli(args, { echo = null, bin = 'delta-cli', spawnImpl = spa
     });
     child.stderr.on('data', (chunk) => { err += chunk; if (echo) echo(chunk); });
     child.on('error', (e) => reject(e.code === 'ENOENT'
-      ? new DeltaError('not_installed', `${bin} not found on PATH; install it and configure auth (https://github.com/yzailab/delta-infra-cli)`)
+      ? new DeltaError('not_installed', `${command} not found on PATH; install it and configure auth (https://github.com/yzailab/delta-infra-cli), or set DELTA_CLI to its path`)
       : e));
     child.on('close', (code) => {
       try { resolve(parseOutput(out, code ?? 1, err)); } catch (e) { reject(e); }

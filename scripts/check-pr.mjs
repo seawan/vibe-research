@@ -1,6 +1,6 @@
 // PR policy check + moderator checklist for CI.
 // Usage: node scripts/check-pr.mjs --base <sha> --head <sha> --author <login> --pr <n>
-//          [--build-summary <json>] [--result "<check>=<outcome>"]... [--out pr-report]
+//          [--maintainer] [--build-summary <json>] [--result "<check>=<outcome>"]... [--out pr-report]
 //        node scripts/check-pr.mjs --base <sha> --head <sha> --list-posts
 // Reads the PR's changes from git (never from the working tree, except .refcheck-status written by check-refs),
 // writes <out>/checklist.md and <out>/pr-number, and exits 1 on any policy violation.
@@ -18,6 +18,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--list-posts') o.listPosts = true;
+    else if (a === '--maintainer') o.maintainer = true;
     else if (a === '--result') o.result.push(argv[++i]);
     else if (a.startsWith('--')) o[a.slice(2).replace(/-(\w)/g, (_, c) => c.toUpperCase())] = argv[++i];
   }
@@ -66,7 +67,7 @@ export function runCli(argv, { cwd = process.cwd(), log = console.log } = {}) {
     return f;
   });
   const postBytes = (id) => [...tree].filter(([p]) => p.startsWith(`posts/${id}/`)).reduce((s, [, t]) => s + t.size, 0);
-  const violations = checkPr({ changed, prAuthor: o.author, baseAuthors: (id) => authorsAt(base, id), headAuthors: (id) => authorsAt(head, id) ?? [], postBytes });
+  const violations = checkPr({ changed, prAuthor: o.author, baseAuthors: (id) => authorsAt(base, id), headAuthors: (id) => authorsAt(head, id) ?? [], postBytes, maintainer: !!o.maintainer });
 
   // build summary (from `npm run build:drafts -- --summary <file>`) and per-post .refcheck-status
   let summary = null;

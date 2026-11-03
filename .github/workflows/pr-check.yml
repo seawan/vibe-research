@@ -20,6 +20,8 @@ jobs:
       HEAD: ${{ github.event.pull_request.head.sha }}
       PR_AUTHOR: ${{ github.event.pull_request.user.login }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
+      # set by GitHub, not by the PR: owners, members and collaborators may change files outside posts/
+      PR_MAINTAINER: ${{ contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -84,7 +86,9 @@ jobs:
           REFS_OUTCOME: ${{ steps.refs.outcome }}
           BUILD_OUTCOME: ${{ steps.build.outcome }}
         run: |
-          node scripts/check-pr.mjs --base "$BASE" --head "$HEAD" --author "$PR_AUTHOR" --pr "$PR_NUMBER" \
+          maintainer=""
+          [ "$PR_MAINTAINER" = true ] && maintainer="--maintainer"
+          node scripts/check-pr.mjs --base "$BASE" --head "$HEAD" --author "$PR_AUTHOR" --pr "$PR_NUMBER" $maintainer \
             --build-summary pr-report/build.json \
             --result "npm test=$TEST_OUTCOME" \
             --result "list changed posts=$POSTS_OUTCOME" \

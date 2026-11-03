@@ -89,7 +89,7 @@ A second workflow then posts one checklist comment on the PR with each result, e
 
 The Delta-reproducible badge means anyone can rerun your experiment on Delta. Delta is open to anyone who registers:
 
-1. Register for Delta and install `delta-cli`, then log in with it (follow the Delta documentation). The site and CI never hold Delta credentials; runs use your own account.
+1. Register for Delta and install `delta-cli`, then log in with it (follow the Delta documentation). The site and CI never hold Delta credentials; runs use your own account. On Windows, an npm-installed `delta-cli` (a `.cmd` shim) is found on `PATH` and run through node automatically. If yours lives somewhere else, set `DELTA_CLI` to its path (an executable, or a `.js` entry point that is run with node).
 2. Write `delta.yaml` in your post folder (image, resources, `command`, `outputs`); `npm run rerun -- <postDir> --dry-run` validates it and prints the delta-cli commands without running anything.
 3. Record the real run:
 

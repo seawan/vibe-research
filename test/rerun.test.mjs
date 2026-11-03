@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { rerun, resolvePostDir } from '../scripts/lib/rerun.mjs';
-import { DeltaError, parseOutput, deltaCli } from '../scripts/lib/delta-cli.mjs';
+import { DeltaError, parseOutput, deltaCli, resolveDeltaBin } from '../scripts/lib/delta-cli.mjs';
 import { runCli } from '../scripts/vibe-rerun.mjs';
 
 const FIX = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'posts', 'alice', 'hello');
@@ -304,6 +304,40 @@ test('deltaCli spawns with an argv array (no shell) and parses the envelope', as
   assert.deepEqual(json.data.argv, [tricky]);
   await assert.rejects(deltaCli(['-e', 'console.log(JSON.stringify({ok:false,error:{type:"not_found",message:"no sandbox"}})); process.exit(4)'], { bin: process.execPath }), (e) => e.type === 'not_found');
   await assert.rejects(deltaCli([], { bin: 'definitely-not-delta-cli-xyz' }), (e) => e.type === 'not_installed');
+});
+
+test('resolveDeltaBin: DELTA_CLI override, Windows npm shim to node + run.js, plain name elsewhere', () => {
+  const none = () => false;
+  assert.deepEqual(resolveDeltaBin({ env: { DELTA_CLI: 'C:\\tools\\delta-cli.exe' }, platform: 'win32', exists: none }), { command: 'C:\\tools\\delta-cli.exe', prefix: [] });
+  assert.deepEqual(resolveDeltaBin({ env: { DELTA_CLI: '/opt/delta/run.js' }, platform: 'linux', execPath: '/usr/bin/node', exists: none }), { command: '/usr/bin/node', prefix: ['/opt/delta/run.js'] });
+  assert.deepEqual(resolveDeltaBin({ env: { PATH: '/usr/bin' }, platform: 'linux', exists: () => true }), { command: 'delta-cli', prefix: [] });
+  const npm = 'C:\\Users\\me\\AppData\\Roaming\\npm';
+  const runJs = `${npm}\\node_modules\\@delta-infra\\cli\\scripts\\run.js`;
+  const files = new Set([`${npm}\\delta-cli.cmd`, `${npm}\\delta-cli.ps1`, runJs]);
+  const env = { Path: `C:\\Windows\\system32;"${npm}"` };
+  assert.deepEqual(resolveDeltaBin({ env, platform: 'win32', execPath: 'C:\\node\\node.exe', exists: (f) => files.has(f) }), { command: 'C:\\node\\node.exe', prefix: [runJs] });
+  files.add(`${npm}\\node.exe`);
+  assert.deepEqual(resolveDeltaBin({ env, platform: 'win32', execPath: 'C:\\node\\node.exe', exists: (f) => files.has(f) }), { command: `${npm}\\node.exe`, prefix: [runJs] });
+  assert.deepEqual(resolveDeltaBin({ env: { Path: npm }, platform: 'win32', exists: none }), { command: 'delta-cli', prefix: [] });
+});
+
+test('deltaCli spawns the resolved command with prefix + args as an argv array', async () => {
+  const calls = [];
+  const spawnImpl = (command, args, opts) => {
+    calls.push({ command, args, opts });
+    const child = new EventEmitter();
+    for (const k of ['stdout', 'stderr']) { child[k] = new EventEmitter(); child[k].setEncoding = () => {}; }
+    setImmediate(() => { child.stdout.emit('data', '{"ok":true,"data":{}}\\n'); child.emit('close', 0); });
+    return child;
+  };
+  const tricky = 'echo "a b" & del x';
+  await deltaCli(['sandbox', 'run', tricky], { spawnImpl, resolveBin: () => ({ command: 'C:\\node\\node.exe', prefix: ['C:\\npm\\run.js'] }) });
+  assert.equal(calls[0].command, 'C:\\node\\node.exe');
+  assert.deepEqual(calls[0].args, ['C:\\npm\\run.js', 'sandbox', 'run', tricky]);
+  assert.ok(!calls[0].opts.shell);
+  await deltaCli(['--version'], { spawnImpl, bin: 'my-delta', resolveBin: () => assert.fail('bin given, must not resolve') });
+  assert.equal(calls[1].command, 'my-delta');
+  assert.deepEqual(calls[1].args, ['--version']);
 });
 
 test('vibe-rerun exit codes: 0 match, 1 mismatch, 2 usage, 130 interrupted', async () => {

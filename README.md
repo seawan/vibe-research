@@ -36,7 +36,7 @@ npm run rerun -- posts/<user>/<slug> --record   # run on Delta, pull outputs, wr
 
 ## Pull requests and CI
 
-- `.github/workflows/pr-check.yml` (**PR checks**, `pull_request`, read-only token): `npm test`, the PR policy (`scripts/check-pr.mjs`: only the author's own `posts/<user>/<slug>/` folders, authors read from the base branch, file-type allowlist, 5 MB/file and 25 MB/post, no active SVG), `check-refs --ci` on each changed post using the base branch's `refcache.json`, and `npm run build:drafts`. It uploads `site-preview` (the built site) and `pr-report` (the checklist).
+- `.github/workflows/pr-check.yml` (**PR checks**, `pull_request`, read-only token): `npm test`, the PR policy (`scripts/check-pr.mjs`: only the author's own `posts/<user>/<slug>/` folders (the repo owner, members and collaborators may also change files outside `posts/`), authors read from the base branch, file-type allowlist, 5 MB/file and 25 MB/post, no active SVG), `check-refs --ci` on each changed post using the base branch's `refcache.json`, and `npm run build:drafts`. It uploads `site-preview` (the built site) and `pr-report` (the checklist).
 - `.github/workflows/pr-comment.yml` (`workflow_run` after PR checks): downloads only `pr-report` and creates or updates one checklist comment on the PR. It never checks out or runs PR code.
 - `.github/CODEOWNERS`: every merge needs the owner's review. Takedown = revert.
 

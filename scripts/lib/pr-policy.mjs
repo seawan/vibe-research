@@ -71,13 +71,14 @@ export function postOf(p) {
 
 // changed: [{ path, size, content?, deleted?, mode? }]; returns a list of violations (empty = OK).
 // baseAuthors(id) is null when the post does not exist on the base branch; postBytes(id) is the post's size at head.
-export function checkPr({ changed, prAuthor, baseAuthors, headAuthors, postBytes }) {
+// maintainer (repo owner, member or collaborator, from GitHub's author_association) may change files outside posts/.
+export function checkPr({ changed, prAuthor, baseAuthors, headAuthors, postBytes, maintainer = false }) {
   const v = [];
   const me = String(prAuthor).toLowerCase();
   const posts = new Map();
   for (const f of changed) {
     const post = postOf(f.path);
-    if (!post) { v.push(`${f.path}: outside posts/<user>/<slug>/ (a PR may only change files in a post folder)`); continue; }
+    if (!post) { if (!maintainer) v.push(`${f.path}: outside posts/<user>/<slug>/ (a PR may only change files in a post folder)`); continue; }
     if (!posts.has(post.id)) posts.set(post.id, { ...post, bytes: 0 });
     if (f.deleted) continue;
     posts.get(post.id).bytes += f.size;

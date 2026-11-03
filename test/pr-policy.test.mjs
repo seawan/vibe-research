@@ -243,9 +243,14 @@ test('cli: rejects invalid --pr', () => {
 
 test('cli: folder names are matched literally, never as pathspec globs', () => {
   const r = repo();
-  r.write('posts/bob/o*/index.md', FM(['bob']));
-  r.write('posts/bob/o*/run.py', 'print(3)\n');
-  r.git('add', '-A'); r.git('commit', '-q', '-m', 'glob-named post');
+  // '*' is not a legal filename character on Windows: stage straight into the index, past Git for Windows' NTFS guard
+  const stage = (p, s) => {
+    r.write('blob.tmp', s);
+    r.git('-c', 'core.protectNTFS=false', 'update-index', '--add', '--cacheinfo', `100644,${r.git('hash-object', '-w', 'blob.tmp')},${p}`);
+  };
+  stage('posts/bob/o*/index.md', FM(['bob']));
+  stage('posts/bob/o*/run.py', 'print(3)\n');
+  r.git('commit', '-q', '-m', 'glob-named post');
   const { code, md } = cli(r.d, ['--base', r.base, '--head', r.git('rev-parse', 'HEAD'), '--author', 'bob', '--pr', '11']);
   assert.equal(code, 0, md);
 });

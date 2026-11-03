@@ -54,7 +54,8 @@ test('new-post scaffolds nested folder', async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-new-'));
   for (const d of ['scripts', 'templates']) fs.cpSync(path.join(repo, d), path.join(tmp, d), { recursive: true });
   for (const f of ['package.json', 'site.config.json']) fs.copyFileSync(path.join(repo, f), path.join(tmp, f));
-  fs.symlinkSync(path.join(repo, 'node_modules'), path.join(tmp, 'node_modules'));
+  // a junction needs no symlink privilege on Windows; the type is ignored elsewhere
+  fs.symlinkSync(path.join(repo, 'node_modules'), path.join(tmp, 'node_modules'), 'junction');
   execFileSync('node', ['scripts/new-post.mjs', '--user', 'alice', 'My Title'], { cwd: tmp });
   const dir = path.join(tmp, 'posts/alice/my-title');
   const md = fs.readFileSync(path.join(dir, 'index.md'), 'utf8');

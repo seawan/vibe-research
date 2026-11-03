@@ -9,6 +9,7 @@ import { spawn } from 'node:child_process';
 import { rerun, resolvePostDir } from '../scripts/lib/rerun.mjs';
 import { DeltaError, parseOutput, deltaCli } from '../scripts/lib/delta-cli.mjs';
 import { runCli } from '../scripts/vibe-rerun.mjs';
+import { trySymlink } from './helpers.mjs';
 
 const FIX = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'posts', 'alice', 'hello');
 const quiet = { log: () => {}, warn: () => {} };
@@ -275,7 +276,7 @@ test('resolvePostDir maps <user>/<slug> into the package posts folder', () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   assert.equal(resolvePostDir('alice/hello', { cwd: '/nonexistent' }), path.join(root, 'posts', 'alice', 'hello'));
   assert.equal(resolvePostDir('test/fixtures/posts/alice/hello', { cwd: root }), path.join(root, 'test/fixtures/posts/alice/hello'));
-  assert.equal(resolvePostDir('./alice/hello', { cwd: '/x' }), '/x/alice/hello');
+  assert.equal(resolvePostDir('./alice/hello', { cwd: '/x' }), path.resolve('/x', 'alice', 'hello'));
 });
 
 test('parseOutput rebuilds stdout lines that delta-cli joined without newlines', () => {
@@ -360,12 +361,12 @@ test('record: a failed pull leaves the post untouched', async () => {
   assert.equal(sub(cli.calls.at(-1)), 'kill');
 });
 
-test('record refuses to write through a symlink in the post folder', async () => {
+test('record refuses to write through a symlink in the post folder', async (t) => {
   const postDir = twoOutputPost();
   const outside = path.join(tmp(), 'outside.txt');
   fs.writeFileSync(outside, 'keep\n');
   fs.rmSync(path.join(postDir, 'code', 'b.txt'));
-  fs.symlinkSync(outside, path.join(postDir, 'code', 'b.txt'));
+  if (!trySymlink(t, outside, path.join(postDir, 'code', 'b.txt'))) return;
   const cli = fakeCli();
   await assert.rejects(rerun({ postDir, mode: 'record', cli, signals: new EventEmitter(), ...quiet }), (e) => e.exitCode === 2 && /symlink/.test(e.message));
   assert.equal(cli.calls.length, 0);

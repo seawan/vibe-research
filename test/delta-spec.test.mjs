@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDeltaSpec, figuresIn, checkFigures, computeBadge } from '../scripts/lib/delta-spec.mjs';
 import { buildSite } from '../scripts/build.mjs';
+import { trySymlink } from './helpers.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const VALID = fs.readFileSync(path.join(HERE, 'fixtures/delta/valid.yaml'), 'utf8');
@@ -90,10 +91,10 @@ test('outputs and script are relative to upload', () => {
   assert.deepEqual(checkFigures({ figures: [{ path: 'code/fig.png', diagram: false }], outputs: ['fig.png'], upload: 'code' }), []);
   has(computeBadge({ postDir: mkPost({ 'experiment.py': '', 'fig.png': '' }), spec: s, run: run0 }).reasons, 'upload directory');
 });
-test('symlink escaping the post dir does not count', () => {
+test('symlink escaping the post dir does not count', (t) => {
   const outside = mkPost({ 'secret.csv': '' });
   const dir = mkPost({ 'experiment.py': '' });
-  fs.symlinkSync(path.join(outside, 'secret.csv'), path.join(dir, 'results.csv'));
+  if (!trySymlink(t, path.join(outside, 'secret.csv'), path.join(dir, 'results.csv'))) return;
   has(computeBadge({ postDir: dir, spec: spec(), run: run0 }).reasons, 'results.csv');
   fs.rmSync(path.join(dir, 'results.csv')); fs.writeFileSync(path.join(dir, 'real.csv'), '');
   fs.symlinkSync('real.csv', path.join(dir, 'results.csv'));

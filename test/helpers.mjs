@@ -12,3 +12,16 @@ export function buildFixture(name = 'posts') {
   const result = buildSite({ postsDir: path.join(FIXTURES, name), outDir });
   return { outDir, result };
 }
+
+// Make a file symlink, or skip test `t` where the OS refuses (Windows without
+// admin or Developer Mode throws EPERM). Returns whether the link was made.
+export function trySymlink(t, target, linkPath) {
+  try {
+    fs.symlinkSync(target, linkPath);
+    return true;
+  } catch (e) {
+    if (e.code !== 'EPERM') throw e;
+    t.skip('this OS does not let the current user create symlinks (EPERM)');
+    return false;
+  }
+}

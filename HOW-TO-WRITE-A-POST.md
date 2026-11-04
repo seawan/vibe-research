@@ -74,6 +74,7 @@ Read it the way your reader would. Then just say what to change, for example:
 
 - "Make it simpler. A 12-year-old would not know what a *parameter* is."
 - "Add an animation that shows the computer's guess changing as it learns."
+- "Add an interactive figure where the reader guesses first, then moves a slider."
 - "This picture is confusing. Label the axes in words."
 - "Ask ChatGPT (Codex) to rewrite it for kids, then check the numbers still match."
 
@@ -95,7 +96,7 @@ To change a post later, ask Claude to edit it and "publish it" again.
 ## Good to know
 
 - **Each post is one folder:** `posts/<your-github-name>/<post-name>/`. You can only change your own folders.
-- **Pictures:** PNG, JPG, GIF (for animations) or WebP. Each file must be under 5 MB, and a whole post under 25 MB. HTML files are not allowed.
+- **Pictures:** PNG, JPG, GIF (for animations) or WebP. Each file must be under 5 MB, and a whole post under 25 MB. HTML files are not allowed, but Claude can add interactive figures another way.
 - **Numbers must be real.** Every figure and headline number has to come from the actual run. The site rejects figures that the experiment did not produce, unless the caption says it is a hand-made diagram.
 - **References are checked.** If the post cites papers, each one is checked against arXiv, Crossref or Semantic Scholar before it can be published.
 - **Name your AI helpers.** The post lists every AI that helped, such as Claude, or ChatGPT if it did a rewrite.

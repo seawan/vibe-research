@@ -9,6 +9,7 @@ import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js';
 import matter from 'gray-matter';
 import { validatePost } from './lib/post-schema.mjs';
+import { expandInteractive } from './lib/interactive.mjs';
 import { parseDeltaSpec, figuresIn, checkFigures, computeBadge, stripDiagram } from './lib/delta-spec.mjs';
 import { aiProcessBox, specsSection, verificationBox, reproduceBox, bylineHtml, updatedHtml, resolveResultMacros, postCommit, esc, safeUrl } from './lib/sections.mjs';
 import { homePage, searchIndex, feedXml, sitePages, siteRoot } from './lib/pages.mjs';
@@ -97,6 +98,17 @@ function makeMarked(toc, ctx) {
         },
         renderer: ({ href, label }) => `<p class="code-caption">${safeUrl(href) ? `<a href="${esc(href)}">${esc(label)}</a>` : esc(label)}</p>\n`,
       },
+      // sandboxed figure emitted by expandInteractive: scripts only, opaque origin, no same-origin access
+      {
+        name: 'interactive', level: 'block',
+        start: (src) => src.match(/^@@interactive /m)?.index,
+        tokenizer(src) {
+          const m = /^@@interactive ([^\n]+)(?:\n|$)/.exec(src);
+          if (!m) return undefined;
+          try { return { type: 'interactive', raw: m[0], ...JSON.parse(decodeURIComponent(m[1])) }; } catch { return undefined; }
+        },
+        renderer: ({ doc, height, caption }) => `<figure class="interactive"><iframe sandbox="allow-scripts" referrerpolicy="no-referrer" loading="lazy" title="${esc(caption.replace(/[*_`]/g, ''))}" style="height:${Number(height)}px" srcdoc="${esc(doc)}"></iframe><noscript><p>This interactive figure needs JavaScript. The pictures around it show the same results.</p></noscript><figcaption>${marked.parseInline(caption)}</figcaption></figure>\n`,
+      },
     ],
     gfm: true,
     renderer: {
@@ -162,7 +174,7 @@ ${url ? `<link rel="canonical" href="${esc(url)}">` : ''}
 ${body}
 </main>
 <footer class="site-footer"><div class="wrap">© ${new Date().getFullYear()} ${esc(site.author)} · Built with plain Markdown, KaTeX and checked references.</div></footer>
-</body>
+${body.includes('<figure class="interactive">') ? `<script src="${rel}assets/interactive-host.js" defer></script>\n` : ''}</body>
 </html>`;
 }
 
@@ -344,7 +356,7 @@ function loadPost(id) {
     r.errors.forEach((m) => report(`tldr: ${m}`));
     return r.markdown;
   });
-  withIncludes = macros.markdown;
+  withIncludes = expandInteractive(macros.markdown, { dir, outputs: Array.isArray(spec?.outputs) ? spec.outputs : fm.outputs ?? [], report });
   const figures = figuresIn(withIncludes); // include-expanded, as rendered
   checkFigures({ figures, outputs: Array.isArray(spec?.outputs) ? spec.outputs : fm.outputs ?? [], upload: typeof spec?.upload === 'string' ? spec.upload : '.' }).forEach(report);
   const delta = { spec: specOk ? spec : null, run, ...computeBadge({ postDir: dir, spec: specOk ? spec : null, run, figures }) };

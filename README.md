@@ -31,6 +31,7 @@ npm run rerun -- posts/<user>/<slug> --record   # run on Delta, pull outputs, wr
 - Everything else in the post folder (figures, scripts, CSVs) is copied next to the page.
 - Code (`.py`, `.jl`, `.r`, `.sh`, `.js`, `.lean`, …), CSV/TSV, JSON and Jupyter notebooks each get a readable HTML page (`<file>.html`) with syntax highlighting, line numbers and `#L10-L20` line links. Links to these files in a post open that page, and the post ends with a "Code & data" list.
 - `@include experiment.py#L41-L48` on its own line inserts those lines of the real file, with a link to them in the full file.
+- `@interactive widgets.js#name data=results.csv "Caption"` on its own line adds a sandboxed interactive figure (see CONTRIBUTING.md).
 
 `npm run build` fails if a cited key is missing from `refs.json`, a cited reference is not verified, or any math fails to render. Posts with `draft: true` are left out unless you use `npm run build:drafts`.
 

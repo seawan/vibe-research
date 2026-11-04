@@ -50,6 +50,18 @@ Every post reads like a short paper, in this order:
 
 You write sections 3, 5 and 6. Do not write `## Specs`, `## Author verification`, `## References` or `## Reproduce` yourself: the build generates them and rejects hand-written ones. Raw HTML in Markdown is shown as text, never rendered.
 
+### Interactive figures
+
+For something readers can play with, write a small `.js` file in your post folder and add a line like this on its own:
+
+```
+@interactive widgets.js#odds data=probes.json:odds:alphabet,results.csv "Caption shown under the figure."
+```
+
+`#odds` is passed to your script as `VIBE.name`. `data=` lists files from your `outputs`, optionally with the top-level keys to include, and the build copies them in as `VIBE.data["probes.json"]` (CSV becomes a list of rows; at most 200 KB per figure). Your script also gets `root` (the element to draw in), `h(tag, attrs, ...children)` and `report()` (refit the height).
+
+The script runs in a sandboxed frame: no access to the page, no network, and no storage. It must show results from the data it is given. If it calculates anything new, say so in the post. Keep a static picture of the main result too, for readers without JavaScript. The script appears in the Code & data list, and the moderator reads it.
+
 The easiest way to get all of this right is the `/publish-vibe-research` skill in `skills/publish-vibe-research/`.
 
 ## Licenses

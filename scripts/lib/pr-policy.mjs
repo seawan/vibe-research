@@ -1,7 +1,7 @@
 // Pull-request policy: which files a PR may touch, and the moderator checklist. Pure: no git or file access.
 export const ALLOWED_EXTENSIONS = 'md json yaml yml csv tsv txt py ipynb jl r sh js mjs ts lean c cpp h rs go java m tex bib toml cfg ini png jpg jpeg gif webp svg pdf'.split(' ');
 export const LIMITS = { fileBytes: 5_000_000, postBytes: 25_000_000 };
-export const MANUAL_ITEMS = ['claims match cited sources', 'AI & contribution statement plausible', 'author verification is specific'];
+export const MANUAL_ITEMS = ['claims match cited sources', 'AI & contribution statement plausible', 'author verification is specific', 'any interactive figure script is readable and does what its caption says'];
 export const REPORT_MARKER = '<!-- vibe-research-report -->';
 
 // SVG: allowlist scanner (no script, foreignObject, links, animation, style element, external refs)

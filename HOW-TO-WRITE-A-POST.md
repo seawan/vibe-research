@@ -75,6 +75,7 @@ Read it the way your reader would. Then just say what to change, for example:
 - "Make it simpler. A 12-year-old would not know what a *parameter* is."
 - "Add an animation that shows the computer's guess changing as it learns."
 - "Add an interactive figure where the reader guesses first, then moves a slider."
+- "Turn this post into a game in short stages for children, and cut anything repeated."
 - "This picture is confusing. Label the axes in words."
 - "Ask ChatGPT (Codex) to rewrite it for kids, then check the numbers still match."
 

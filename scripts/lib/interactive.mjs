@@ -4,10 +4,20 @@
 // so the script can never run outside the sandbox.
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const LINE = /^@interactive[ \t]+(\S+?\.js)#([\w-]+)((?:[ \t]+[a-z]+=\S+)*)[ \t]+"(.*)"[ \t]*$/gm;
 const SANE_NAME = /^(?!\/)(?!.*\.\.)[\w./-]+$/;
 export const MAX_DATA_BYTES = 200_000;
+const IMAGE_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
+const LESSON_KIT = fs.readFileSync(fileURLToPath(new URL('./lesson-kit.js', import.meta.url)), 'utf8');
+const LESSON_CSS = `.head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.progress{flex:1;height:12px;border-radius:6px;background:var(--line);overflow:hidden}.progress i{display:block;height:100%;background:var(--good);transition:width .25s}
+button.quiet{background:none;border:0;min-height:38px;padding:4px 8px;color:var(--muted)}button.go{background:var(--good);border-color:var(--good);color:var(--bg);font-weight:650;width:100%;min-height:46px;margin-top:10px}
+.path{display:flex;flex-direction:column;gap:10px}.stage{display:flex;align-items:center;gap:12px;text-align:left;font-weight:650;padding:10px 12px;min-height:60px}.stage small{font-weight:400;color:var(--muted)}.stage .dot{flex:none;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--line);font-size:20px}
+.stage.done .dot{background:var(--good);color:var(--bg)}.stage.next{border:2px solid var(--good)}.lead{font-size:18px;margin:6px 0 12px}.ask{font-size:18px;font-weight:650;margin:6px 0 12px}
+.choices{display:grid;gap:8px;margin:12px 0}button.choice{text-align:left;min-height:46px}button.choice:disabled{opacity:1}.choice.right{background:var(--goodbg);border-color:var(--good)}.choice.wrong{background:var(--badbg);border-color:var(--bad)}.choice.chosen{border:2px solid var(--accent)}
+.foot{margin-top:12px;padding-top:2px}.foot:empty{display:none}.foot p{margin:8px 0 0}.foot.good,.foot.bad{padding:10px 12px;border-radius:10px}.foot.good{background:var(--goodbg)}.foot.bad{background:var(--badbg)}.card{background:var(--panel);border-radius:10px;padding:12px;margin:12px 0}
+.win{text-align:center;padding:12px 0}.big{font-size:52px;line-height:1.2}.muted{color:var(--muted);font-size:14px}`;
 
 // "a,b\n1,x" -> [{ a: 1, b: 'x' }]
 export function parseCsv(text) {
@@ -24,6 +34,8 @@ function loadData(spec, dir, outputs, problem) {
     if (!outputs.includes(path.posix.normalize(file))) problem(`data file "${file}" is not listed in outputs`);
     const p = path.join(dir, file);
     if (!fs.existsSync(p)) { problem(`data file "${file}" not found`); continue; }
+    const mime = IMAGE_TYPES[path.extname(file).toLowerCase()];
+    if (mime) { data[file] = `data:${mime};base64,${fs.readFileSync(p).toString('base64')}`; continue; }
     const text = fs.readFileSync(p, 'utf8');
     let value;
     try { value = file.endsWith('.csv') ? parseCsv(text) : JSON.parse(text); } catch (e) { problem(`data file "${file}": ${e.message}`); continue; }
@@ -54,13 +66,14 @@ new ResizeObserver(report).observe(document.body);addEventListener('load',report
 for(const ev of['click','input'])addEventListener(ev,()=>setTimeout(report,30));
 addEventListener('error',()=>{root.textContent='This interactive figure could not start.';});`;
 
-export function srcdoc({ code, name, data }) {
+export function srcdoc({ code, name, data, kit }) {
   const json = (v) => JSON.stringify(v).replace(/</g, '\\u003c');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:">
-<style>${KIT_CSS}</style></head><body><div id="root"></div>
+<style>${KIT_CSS}${kit === 'lesson' ? LESSON_CSS : ''}</style></head><body><div id="root"></div>
 <script>const VIBE={name:${json(name)},data:${json(data)}};
 ${KIT_JS}
+${kit === 'lesson' ? LESSON_KIT : ''}
 ${code}
 </script></body></html>`;
 }
@@ -79,6 +92,6 @@ export function expandInteractive(md, { dir, outputs, report }) {
     const size = JSON.stringify(data).length;
     if (size > MAX_DATA_BYTES) problem(`data is ${size} bytes; the limit is ${MAX_DATA_BYTES}. Pick fewer keys, like data=file.json:key`);
     const height = Math.min(1600, Math.max(80, parseInt(options.height, 10) || 360));
-    return `@@interactive ${encodeURIComponent(JSON.stringify({ doc: srcdoc({ code, name, data }), height, caption }))}\n`;
+    return `@@interactive ${encodeURIComponent(JSON.stringify({ doc: srcdoc({ code, name, data, kit: options.kit }), height, caption }))}\n`;
   });
 }

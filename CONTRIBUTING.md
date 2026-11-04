@@ -60,6 +60,8 @@ For something readers can play with, write a small `.js` file in your post folde
 
 `#odds` is passed to your script as `VIBE.name`. `data=` lists files from your `outputs`, optionally with the top-level keys to include, and the build copies them in as `VIBE.data["probes.json"]` (CSV becomes a list of rows; at most 200 KB per figure). Your script also gets `root` (the element to draw in), `h(tag, attrs, ...children)` and `report()` (refit the height).
 
+`data=` may also list pictures from `outputs`, which arrive as data URLs. Add `kit=lesson` to turn the figure into a game in stages: call `lesson({ stages, finish })` from your script. The step types are described at the top of `scripts/lib/lesson-kit.js`, and `posts/seawan/birthday-surprise/game.js` is a full example.
+
 The script runs in a sandboxed frame: no access to the page, no network, and no storage. It must show results from the data it is given. If it calculates anything new, say so in the post. Keep a static picture of the main result too, for readers without JavaScript. The script appears in the Code & data list, and the moderator reads it.
 
 The easiest way to get all of this right is the `/publish-vibe-research` skill in `skills/publish-vibe-research/`.

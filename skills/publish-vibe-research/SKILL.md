@@ -98,6 +98,7 @@ Markdown features: `$math$` and `$$display$$` (KaTeX), `[@key]` citations, `![al
 - GIF for animations: fixed frame size, quantized to about 64 colours, a pause on the last frame, under 5 MB. Also save the key frame as a PNG so the idea survives without motion.
 - No matplotlib SVGs (rejected). No HTML files. At most 5 MB per file and 25 MB per post.
 - Interactive figures: `@interactive widgets.js#name data=probes.json:key,results.csv "Caption"` runs your script in a sandbox with data from `outputs` (format in `CONTRIBUTING.md`; example in `posts/seawan/tiny-storyteller/widgets.js`). Put the box **before** the text that gives the answer: ask the reader to guess first, show the real result, then let them explore. One idea per figure. Keep a static picture too. Say so in the post if the script calculates anything new.
+- Games for children: add `kit=lesson` for a game in stages, one small step at a time, with stars and missed questions coming back (see `posts/seawan/birthday-surprise/game.js`). Then keep the page short: the game teaches, and the text below holds only the method, the main results and the limits. Don't put the game's answers in the subtitle or summary, because they appear above the game.
 
 ## 6. References and chat excerpts
 

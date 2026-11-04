@@ -46,6 +46,17 @@ test('data cannot close the script tag', () => {
   assert.match(doc, /\\u003c\/script/);
 });
 
+test('kit=lesson adds the lesson kit only when asked for', () => {
+  const { run } = setup({ 'w.js': 'go()' });
+  assert.match(payload(run('@interactive w.js#one kit=lesson "c"', [])).doc, /function lesson\(/);
+  assert.doesNotMatch(payload(run('@interactive w.js#one "c"', [])).doc, /function lesson\(/);
+});
+
+test('pictures from outputs arrive as data URLs', () => {
+  const { run } = setup({ 'w.js': 'go()', 'p.png': 'abc' });
+  assert.match(payload(run('@interactive w.js#one data=p.png "c"', ['p.png'])).doc, /"p\.png":"data:image\/png;base64,YWJj"/);
+});
+
 test('parseCsv turns numbers into numbers', () => {
   assert.deepEqual(parseCsv('a,b\n1,x\n2.5,y\n'), [{ a: 1, b: 'x' }, { a: 2.5, b: 'y' }]);
 });

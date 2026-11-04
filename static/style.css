@@ -71,6 +71,7 @@ h2:hover .anchor, h3:hover .anchor { opacity: 1; }
 
 figure { margin: 28px 0; text-align: center; }
 figure img { border-radius: 6px; background: #fff; }
+figure.interactive iframe { display: block; width: 100%; border: 0; background: transparent; }
 figcaption { font: 15px/1.5 var(--sans); color: var(--muted); margin-top: 8px; text-align: left; }
 body { counter-reset: fig; }
 figcaption::before { counter-increment: fig; content: "Figure " counter(fig) ". "; font-weight: 650; color: var(--fg); }

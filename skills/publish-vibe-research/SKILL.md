@@ -90,13 +90,14 @@ For every reader:
 - Give the reader something to try: a guess to make before a picture, a game to play.
 - Optional: ask ChatGPT (Codex CLI) to rewrite the post for young readers, then re-check every number and figure reference against the outputs, and add ChatGPT to `ai:`.
 
-Markdown features: `$math$` and `$$display$$` (KaTeX), `[@key]` citations, `![alt](file.png "Caption")` figures, callouts (`[!NOTE]`, `[!INTUITION]`, `[!TAKEAWAY]`, `[!WARNING]`, `[!DEFINITION]`, `[!EXAMPLE]`), tables, and `@include experiment.py#L10-L20` for real code. Raw HTML is shown as text, so interactive widgets are not possible; use GIF animations instead.
+Markdown features: `$math$` and `$$display$$` (KaTeX), `[@key]` citations, `![alt](file.png "Caption")` figures, callouts (`[!NOTE]`, `[!INTUITION]`, `[!TAKEAWAY]`, `[!WARNING]`, `[!DEFINITION]`, `[!EXAMPLE]`), tables, and `@include experiment.py#L10-L20` for real code. Raw HTML is shown as text. For interactive figures, see step 5.
 
 ## 5. Pictures and animations
 
 - PNG for still pictures: labelled axes in words, readable font sizes, white background, `dpi>=150`, `bbox_inches="tight"`. Check each one by eye for overlaps and cut-off titles.
 - GIF for animations: fixed frame size, quantized to about 64 colours, a pause on the last frame, under 5 MB. Also save the key frame as a PNG so the idea survives without motion.
 - No matplotlib SVGs (rejected). No HTML files. At most 5 MB per file and 25 MB per post.
+- Interactive figures: `@interactive widgets.js#name data=probes.json:key,results.csv "Caption"` runs your script in a sandbox with data from `outputs` (format in `CONTRIBUTING.md`; example in `posts/seawan/tiny-storyteller/widgets.js`). Put the box **before** the text that gives the answer: ask the reader to guess first, show the real result, then let them explore. One idea per figure. Keep a static picture too. Say so in the post if the script calculates anything new.
 
 ## 6. References and chat excerpts
 

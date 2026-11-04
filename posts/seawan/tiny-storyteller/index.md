@@ -9,18 +9,18 @@ authors: [seawan]
 ai:
   - name: "Claude"
     model: "claude-opus-5-5"
-    role: "wrote the code, ran the experiment in a Delta sandbox, made the pictures and animations, and wrote this version of the post"
+    role: "wrote the code, ran the experiment in a Delta sandbox, made the pictures, animations and interactive figures, and wrote this version of the post"
   - name: "ChatGPT (Codex CLI)"
     model: "gpt-6.1-sol"
     role: "rewrote an earlier version of the post for young readers"
-contribution: "This is an AI vibe paper, made for children who are learning about AI. I asked for kid-friendly research posts, chose which topics to do, and asked for this post to explain the setting in detail with lots of pictures and animations. Claude wrote the code, ran the experiment in a Delta cloud sandbox, made the pictures and animations, and wrote the text, building on an earlier rewrite by ChatGPT (Codex CLI)."
+contribution: "This is an AI vibe paper, made for children who are learning about AI. I asked for kid-friendly research posts, chose which topics to do, and asked for this post to explain the setting in detail with lots of pictures and animations. Claude wrote the code, ran the experiment in a Delta cloud sandbox, made the pictures and animations, and wrote the text, building on an earlier rewrite by ChatGPT (Codex CLI). I then asked for the post to be interactive, with ideas from Brilliant. Claude built the interactive figures."
 license: CC-BY-4.0
 code_license: MIT
 author_verification:
   verified: true
   by: seawan
-  date: 2026-11-02
-  checked: "I read the whole post and looked at every picture to make sure a child can follow it. I checked that the story samples and the numbers in the table match the results files from the Delta run, and that the post has the Delta-reproducible badge and run record."
+  date: 2026-11-04
+  checked: "I read the whole post, looked at every picture, and tried all eight interactive figures to make sure a child can follow them. I checked that the story samples and the numbers in the table match the results files from the Delta run."
 tldr:
   - "Our tiny storyteller plays one game, again and again: guess the next letter."
   - "After practice on one book, its first guess was right about 60 times in 100 on pages it had never seen."
@@ -149,9 +149,15 @@ The model practised on a **GPU**, a computer chip that can do many sums at once,
 
 ## Results
 
+This part is for playing with. Look out for the boxes marked **Interactive**. Each one asks you to guess first, then lets you explore. They all use the model's real recorded results.
+
 ### 1. Watch one guess get sharper
 
-Let's start with a single question: what comes after "Once upon a ti"? The animation shows the model's odds at each checkpoint. The orange bar is the right answer, **m**.
+Let's start with a single question: what comes after "Once upon a ti"? **Make your guess in the box below**, then slide through the practice steps and try both beginnings.
+
+@interactive widgets.js#odds data=probes.json:odds:alphabet:guess_prompts "Interactive: slide through practice and watch one guess sharpen. Orange is the real next letter."
+
+Here are the same odds as an animation. The orange bar is the right answer, **m**.
 
 ![An animated bar chart. At 0 steps all bars are tiny and m has about 1%. At 100 steps n is the tallest bar. At 300 steps l and m are tallest. At 1,000 and 2,000 steps m towers above the rest at 95%.](odds.gif "Animation: its odds for the letter after “Once upon a ti”, at each checkpoint. Orange is the real next letter.")
 
@@ -168,11 +174,21 @@ For "The king and the qu", its odds for **e** grew from under 1% to 87%. It had 
 
 ### 2. Reading along with a hidden sentence
 
-Now a whole sentence. This one comes from the **hidden** part of the book, so the model never practised on it:
+Now a whole sentence. This one comes from the **hidden** part of the book, so the model never practised on it.
+
+**Can you beat the storyteller?** Before we show you the sentence, try guessing it yourself. You choose from just a few letters. The storyteller had to choose from all 81, so you have an easier job!
+
+@interactive widgets.js#guess data=probes.json:read_along:read_along_sentence "Interactive: play against the trained storyteller, one letter at a time. The bars show its real top 3 guesses."
+
+Here is the whole sentence:
 
 > Once upon a time the king held a great feast,
 
 We let the trained model guess each letter, one at a time, looking at all the letters before it. **Green** means its first guess was right. **Red** means it was wrong.
+
+**Guess first** how well it does. Then slide to compare the checkpoints, and **tap any letter** to see the guesses behind it.
+
+@interactive widgets.js#readalong data=probes.json:read_along "Interactive: the same hidden sentence at each checkpoint. Green means its first guess was right, red means wrong."
 
 ![An animation that moves along the sentence one letter at a time. For each letter it shows the model's top 3 guesses as bars, then marks the letter green or red.](read-along.gif "Animation: the trained model reading along with a sentence it has never seen, guessing each letter before it is shown.")
 
@@ -195,6 +211,8 @@ Look at where it goes wrong. It can't know that the sentence starts with "O" rat
 ### 3. The scores for the whole hidden part
 
 One sentence could be lucky or unlucky. So we also scored the model on lots of random stretches of the hidden part.
+
+@interactive widgets.js#scores data=results.csv "Interactive: slide through practice to see “torn between” and the first-guess score at each checkpoint."
 
 ![Five grids of 100 squares, one per checkpoint, with green squares showing how many first guesses out of 100 were right: 1, 32, 48, 58 and 60.](first-guess.png "Out of 100 guesses on the hidden part, how many first guesses were right, at each checkpoint.")
 
@@ -222,11 +240,21 @@ Three things to notice:
 
 To write a story, we give the model a beginning, "Once upon a time". It gives odds for the next letter. The computer **picks** a letter using those odds, a bit like spinning a spinner with bigger slices for likelier letters. We stick that letter on the end and ask again. Over and over.
 
+Now you control the typing. Press **Next letter** to see each roll of the dice.
+
+@interactive widgets.js#typewriter data=probes.json:typewriter:prompt "Interactive: step through the real story one letter at a time. Orange marks the letter the dice picked."
+
+Here it is as an animation:
+
 ![An animation of text being typed one letter at a time after Once upon a time. Under the text, a bar chart shows the model's top 5 choices for the next letter, with the picked letter in orange.](typewriter.gif "Animation: the trained model writing a story, one letter at a time. The bars show its top 5 choices for each letter; orange is the letter that was picked.")
 
 Watch the orange bar. Usually the picked letter is the most likely one. But not always: in this story, 16 of the 60 letters were *not* its top choice. That is on purpose. If it always picked the top letter, it would write the same thing every time, and often get stuck repeating itself.
 
 ### 5. How its writing grew
+
+**Be the detective.** Read this story and guess how much practice it had.
+
+@interactive widgets.js#stories data=samples.json,results.csv "Interactive: guess which checkpoint wrote this story, then slide to read the stories from every checkpoint."
 
 Here is the story it wrote at each checkpoint, always starting from "Once upon a time":
 
@@ -255,6 +283,10 @@ We gave the trained model this beginning and asked for the next letter:
 
 > Once upon a time there was a king who had a daugh_
 
+**Try it.** Before you look at the picture, tap the letter you think it looks back at most. Then compare the layers.
+
+@interactive widgets.js#attention data=probes.json:attention "Interactive: where each layer looks back when it has just read “daugh”. Tap a letter to see its share."
+
 ![Four rows of the same text in letter tiles, one row per layer, with a yellow question mark at the end. Darker orange tiles are the letters that layer looked back at most. In every layer the darkest tiles are in the last few letters, around daugh, and in the last layer also the a and d of had.](attention.png "Which earlier letters each of its 4 layers looks back at most, when guessing the letter after “daugh”. Darker = looked at more.")
 
 Its guess: **t**, with almost 100% odds, to make "daughter".
@@ -265,6 +297,10 @@ Notice that it hardly looks at the beginning of the sentence. To finish "daugh",
 
 When the model writes, there is one more setting we can choose. We call it the **adventure dial**. Scientists call it **temperature**.
 
+**Turn the dial yourself.** Moving the dial changes the odds for one real guess. Then roll the dice to see what it might pick.
+
+@interactive widgets.js#dial data=probes.json:odds:alphabet:guess_prompts:dial "Interactive: the adventure dial on one real guess, plus the stories it really wrote at three settings."
+
 - **Turned down (careful):** it almost always picks its most likely letter.
 - **In the middle (normal):** it usually picks likely letters, but sometimes surprises.
 - **Turned up (wild):** unlikely letters get picked much more often.
@@ -274,6 +310,9 @@ All our other stories used the normal setting (0.8). Here is the same trained mo
 ![Three dials with a needle pointing to careful, normal and wild, each next to a story. The careful story uses real words. The normal story is a bit stranger. The wild story is full of made-up words and odd capital letters.](dial.png "The same trained model writing with the adventure dial (temperature) set to careful (0.3), normal (0.8) and wild (1.5).")
 
 On careful, it uses real words: "he was gone; and the saw that the witch in the house was still". On wild, it invents words like "furnifultaed" and "ChantiAlt". Neither setting makes a sensible story. The dial changes how adventurous it is, not how much it understands.
+
+> [!NOTE]
+> **For grown-ups.** The interactive figures do not run the model in your browser. They display the recorded odds, guesses and stories from [probes.json](probes.json), [samples.json](samples.json) and [results.csv](results.csv). The one live calculation is the dial figure: it raises each recorded probability to the power $1/T$ and rescales them to add up to 1, which gives the same result as the model's softmax with temperature $T$ (the odds were rounded to 5 decimal places). The code is in [widgets.js](widgets.js).
 
 > [!TAKEAWAY]
 > By playing one guessing game with one book, {{result.steps}} times, a tiny model learned a lot by itself. It learned spelling, common words, punctuation and the style of a fairy tale. On pages it had never seen, its first guess went from right about 1 time in 100 to about 60 times in 100. But it never learned to tell a story that makes sense.
